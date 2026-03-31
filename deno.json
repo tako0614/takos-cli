@@ -1,0 +1,40 @@
+{
+  "name": "takos-cli",
+  "version": "0.2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "@std/fmt/colors": "jsr:@std/fmt@^1/colors",
+    "commander": "npm:commander@^12.1.0",
+    "ws": "npm:ws@^8.19.0",
+    "yaml": "npm:yaml@^2.8.2",
+    "zod": "npm:zod@^3.25.32",
+    "takos-actions-engine": "./vendor/takos-actions-engine/src/index.ts",
+    "takos-control/source/app-manifest": "./vendor/takos-control/src/application/services/source/app-manifest.ts",
+    "takos-control/shared/constants": "./vendor/takos-control/src/shared/constants/index.ts",
+    "takos-control/deployment/group-deploy-types": "./vendor/takos-control/src/application/services/deployment/group-deploy-types.ts"
+  },
+  "tasks": {
+    "dev": "deno run --allow-all --watch src/index.ts",
+    "start": "deno run --allow-all src/index.ts",
+    "test": "deno test --allow-all src/ test/",
+    "test:coverage": "deno test --allow-all --coverage=coverage src/ test/",
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
+    "lint": "deno lint",
+    "compile": "deno compile --allow-all --output takos src/index.ts"
+  },
+  "publish": {
+    "include": [
+      "src/",
+      "test/",
+      "vendor/",
+      "shims/",
+      "deno.json",
+      "README.md",
+      "README.ja.md",
+      "LICENSE"
+    ]
+  }
+}

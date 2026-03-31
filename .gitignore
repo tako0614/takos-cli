@@ -1,0 +1,7 @@
+.takos/
+.DS_Store
+coverage/
+deno.lock
+node_modules/
+takos
+*.tsbuildinfo

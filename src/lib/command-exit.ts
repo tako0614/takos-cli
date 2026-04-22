@@ -3,7 +3,7 @@ export class CliCommandExit extends Error {
 
   constructor(code: number) {
     super(`CLI command requested exit with code ${code}`);
-    this.name = 'CliCommandExit';
+    this.name = "CliCommandExit";
     this.code = code;
   }
 }

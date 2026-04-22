@@ -5,19 +5,20 @@
  * checks, schema validation, directory walking) from higher-level auth logic.
  */
 
-import { platform } from 'node:os';
-import { join, resolve } from 'node:path';
+import { platform } from "node:os";
+import { join, resolve } from "node:path";
 import {
-  existsSync,
   chmodSync,
-  openSync,
-  fstatSync,
-  readSync,
   closeSync,
-} from 'node:fs';
-import { logWarning } from './cli-log.ts';
-import { validateApiUrl, isValidId } from './config-validation.ts';
+  existsSync,
+  fstatSync,
+  openSync,
+  readSync,
+} from "node:fs";
+import { logWarning } from "./cli-log.ts";
+import { isValidId, validateApiUrl } from "./config-validation.ts";
 import { Buffer } from "node:buffer";
+import process from "node:process";
 
 // ---------------------------------------------------------------------------
 // Constants & helpers
@@ -27,7 +28,7 @@ import { Buffer } from "node:buffer";
 const SECURE_FILE_MODE = 0o600;
 
 export function isWindows(): boolean {
-  return platform() === 'win32';
+  return platform() === "win32";
 }
 
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ export function isWindows(): boolean {
 
 export interface SessionFile {
   session_id: string;
-  workspace_id: string;
+  space_id: string;
   api_url: string;
 }
 
@@ -69,11 +70,10 @@ function checkFilePermissionsFd(
     const othersWritable = (mode & 0o002) !== 0;
 
     if (groupReadable || othersReadable || groupWritable || othersWritable) {
-      const permString = mode.toString(8).padStart(3, '0');
+      const permString = mode.toString(8).padStart(3, "0");
       return {
         secure: false,
-        warning:
-          `File permissions (${permString}) are too open. ` +
+        warning: `File permissions (${permString}) are too open. ` +
           `Session file should have mode 600 (owner read/write only). ` +
           `Run: chmod 600 "${filePath}"`,
       };
@@ -93,8 +93,9 @@ export function setSecurePermissions(filePath: string): void {
   try {
     chmodSync(filePath, SECURE_FILE_MODE);
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error
+      ? error.message
+      : "Unknown error";
     logWarning(
       `Failed to set secure permissions on ${filePath}: ${errorMessage}`,
     );
@@ -108,38 +109,39 @@ export function setSecurePermissions(filePath: string): void {
 function validateSessionFile(
   data: unknown,
 ): { valid: boolean; error?: string; data?: SessionFile } {
-  if (typeof data !== 'object' || data === null) {
-    return { valid: false, error: 'Session file must be a JSON object' };
+  if (typeof data !== "object" || data === null) {
+    return { valid: false, error: "Session file must be a JSON object" };
   }
 
   const obj = data as Record<string, unknown>;
 
-  if (typeof obj.session_id !== 'string' || obj.session_id.length === 0) {
+  if (typeof obj.session_id !== "string" || obj.session_id.length === 0) {
     return {
       valid: false,
-      error: 'session_id is required and must be a non-empty string',
+      error: "session_id is required and must be a non-empty string",
     };
   }
 
-  if (!isValidId(obj.session_id)) {
+  if (!isValidId(obj.session_id, 8)) {
     return {
       valid: false,
-      error: 'session_id has invalid format (expected UUID or alphanumeric ID)',
+      error:
+        "session_id has invalid format (expected UUID or alphanumeric ID, 8-64 characters)",
     };
   }
 
-  if (obj.workspace_id !== undefined && typeof obj.workspace_id !== 'string') {
-    return { valid: false, error: 'workspace_id must be a string if provided' };
+  if (obj.space_id !== undefined && typeof obj.space_id !== "string") {
+    return { valid: false, error: "space_id must be a string if provided" };
   }
 
   if (obj.api_url !== undefined) {
-    if (typeof obj.api_url !== 'string') {
-      return { valid: false, error: 'api_url must be a string if provided' };
+    if (typeof obj.api_url !== "string") {
+      return { valid: false, error: "api_url must be a string if provided" };
     }
     try {
       new URL(obj.api_url);
     } catch {
-      return { valid: false, error: 'api_url is not a valid URL' };
+      return { valid: false, error: "api_url is not a valid URL" };
     }
   }
 
@@ -147,9 +149,8 @@ function validateSessionFile(
     valid: true,
     data: {
       session_id: obj.session_id,
-      workspace_id:
-        typeof obj.workspace_id === 'string' ? obj.workspace_id : '',
-      api_url: typeof obj.api_url === 'string' ? obj.api_url : '',
+      space_id: typeof obj.space_id === "string" ? obj.space_id : "",
+      api_url: typeof obj.api_url === "string" ? obj.api_url : "",
     },
   };
 }
@@ -165,12 +166,12 @@ function validateSessionFile(
 function tryReadSessionFile(sessionPath: string): SessionFile | null {
   let fd: number | undefined;
   try {
-    fd = openSync(sessionPath, 'r');
+    fd = openSync(sessionPath, "r");
 
     const permCheck = checkFilePermissionsFd(fd, sessionPath);
     if (!permCheck.secure) {
       logWarning(`SECURITY WARNING: ${permCheck.warning}`);
-      logWarning('Refusing to read session file with insecure permissions.');
+      logWarning("Refusing to read session file with insecure permissions.");
       closeSync(fd);
       return null;
     }
@@ -200,7 +201,7 @@ function tryReadSessionFile(sessionPath: string): SessionFile | null {
       if (n === 0) break;
       bytesRead += n;
     }
-    const content = buf.slice(0, bytesRead).toString('utf-8');
+    const content = buf.slice(0, bytesRead).toString("utf-8");
     closeSync(fd);
     fd = undefined;
 
@@ -232,7 +233,7 @@ function tryReadSessionFile(sessionPath: string): SessionFile | null {
         logWarning(
           `Invalid API URL in session file: ${domainValidation.error}`,
         );
-        sessionData.api_url = '';
+        sessionData.api_url = "";
       }
     }
 
@@ -245,8 +246,9 @@ function tryReadSessionFile(sessionPath: string): SessionFile | null {
         /* ignore */
       }
     }
-    const errorMessage =
-      readError instanceof Error ? readError.message : 'Unknown read error';
+    const errorMessage = readError instanceof Error
+      ? readError.message
+      : "Unknown read error";
     logWarning(
       `Failed to read session file at ${sessionPath}: ${errorMessage}`,
     );
@@ -264,10 +266,10 @@ function tryReadSessionFile(sessionPath: string): SessionFile | null {
  */
 export function findSessionFile(): SessionFile | null {
   let dir = resolve(process.cwd());
-  let prevDir = '';
+  let prevDir = "";
 
   while (dir !== prevDir) {
-    const sessionPath = join(dir, '.takos-session');
+    const sessionPath = join(dir, ".takos-session");
     if (existsSync(sessionPath)) {
       const session = tryReadSessionFile(sessionPath);
       if (session !== null) {
@@ -275,7 +277,7 @@ export function findSessionFile(): SessionFile | null {
       }
     }
     prevDir = dir;
-    dir = resolve(dir, '..');
+    dir = resolve(dir, "..");
   }
 
   return null;

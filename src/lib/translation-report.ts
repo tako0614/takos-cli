@@ -1,49 +1,26 @@
-import { bold, green, red, yellow } from '@std/fmt/colors';
+import { bold, green, red, yellow } from "@std/fmt/colors";
 
 export type TranslationIssue = {
-  category: 'resource' | 'workload' | 'route';
+  category: "workload" | "route";
   name: string;
   message: string;
 };
 
-type ResourceTranslationEntry = {
-  resolutionMode?: 'cloudflare-native' | 'provider-backed' | 'takos-runtime' | 'unsupported';
-};
-
 type WorkloadTranslationEntry = {
-  status?: 'native' | 'portable' | 'unsupported';
+  status?: "compatible" | "unsupported";
 };
 
 type RouteTranslationEntry = {
-  status?: 'native' | 'portable' | 'unsupported';
+  status?: "compatible" | "unsupported";
 };
 
 export type TranslationReport = {
-  provider: string;
   supported: boolean;
   requirements?: string[];
-  resources?: ResourceTranslationEntry[];
   workloads?: WorkloadTranslationEntry[];
   routes?: RouteTranslationEntry[];
   unsupported: TranslationIssue[];
 };
-
-function describeBackend(provider: string): string {
-  switch (provider) {
-    case 'cloudflare':
-      return 'Cloudflare backend';
-    case 'aws':
-      return 'AWS compatibility backend';
-    case 'gcp':
-      return 'GCP compatibility backend';
-    case 'k8s':
-      return 'Kubernetes compatibility backend';
-    case 'local':
-      return 'local compatibility backend';
-    default:
-      return `${provider} backend`;
-  }
-}
 
 function formatSummary<T extends string>(
   entries: Array<T | undefined> | undefined,
@@ -58,31 +35,25 @@ function formatSummary<T extends string>(
   const parts = order
     .filter((key) => (counts.get(key) ?? 0) > 0)
     .map((key) => `${key}=${counts.get(key)}`);
-  return parts.length > 0 ? parts.join(', ') : null;
+  return parts.length > 0 ? parts.join(", ") : null;
 }
 
 export function printTranslationReport(report: TranslationReport): void {
-  console.log(bold('Translation:'));
-  console.log('  Spec:     Cloudflare-native');
-  console.log('  Runtime:  Takos runtime');
-  console.log(`  Backend:  ${describeBackend(report.provider)}`);
-  console.log(`  Status:   ${report.supported ? green('supported') : yellow('blocked')}`);
+  console.log(bold("Translation:"));
+  console.log("  Spec:     Takos deploy manifest");
+  console.log("  Runtime:  tenant runtime");
+  console.log("  Surface:  Portable");
+  console.log(
+    `  Status:   ${report.supported ? green("supported") : yellow("blocked")}`,
+  );
 
   if (report.requirements && report.requirements.length > 0) {
-    console.log(`  Needs:    ${report.requirements.join(', ')}`);
-  }
-
-  const resourceSummary = formatSummary(
-    report.resources?.map((entry) => entry.resolutionMode),
-    ['cloudflare-native', 'provider-backed', 'takos-runtime', 'unsupported'],
-  );
-  if (resourceSummary) {
-    console.log(`  Resources: ${resourceSummary}`);
+    console.log(`  Needs:    ${report.requirements.join(", ")}`);
   }
 
   const workloadSummary = formatSummary(
     report.workloads?.map((entry) => entry.status),
-    ['native', 'portable', 'unsupported'],
+    ["compatible", "unsupported"],
   );
   if (workloadSummary) {
     console.log(`  Workloads: ${workloadSummary}`);
@@ -90,19 +61,21 @@ export function printTranslationReport(report: TranslationReport): void {
 
   const routeSummary = formatSummary(
     report.routes?.map((entry) => entry.status),
-    ['native', 'portable', 'unsupported'],
+    ["compatible", "unsupported"],
   );
   if (routeSummary) {
     console.log(`  Routes:   ${routeSummary}`);
   }
 
   if (report.unsupported.length > 0) {
-    console.log('');
-    console.log(bold('Blocked:'));
+    console.log("");
+    console.log(bold("Blocked:"));
     for (const issue of report.unsupported) {
-      console.log(`  ${red('!')} ${issue.category}.${issue.name} ${issue.message}`);
+      console.log(
+        `  ${red("!")} ${issue.category}.${issue.name} ${issue.message}`,
+      );
     }
   }
 
-  console.log('');
+  console.log("");
 }

@@ -1,72 +1,89 @@
-import { printTranslationReport, type TranslationReport } from '../src/lib/translation-report.ts';
+import {
+  printTranslationReport,
+  type TranslationReport,
+} from "../src/lib/translation-report.ts";
 
-import { assertStringIncludes } from 'jsr:@std/assert';
-import { stub } from 'jsr:@std/testing/mock';
-
-function captureOutput(logSpy: ReturnType<typeof vi.spyOn>) {
-  return logSpy.calls.map((args) => args.map((entry) => String(entry)).join(' ')).join('\n');
+function assertStringIncludes(actual: string, expected: string) {
+  if (!actual.includes(expected)) {
+    throw new Error(`Expected output to include ${JSON.stringify(expected)}`);
+  }
 }
 
+function captureConsoleLog() {
+  const originalLog = console.log;
+  const calls: Array<{ args: unknown[] }> = [];
+  console.log = (...args: unknown[]) => {
+    calls.push({ args });
+  };
+  return {
+    calls,
+    restore() {
+      console.log = originalLog;
+    },
+  };
+}
 
-  Deno.test('printTranslationReport - prints spec, runtime, backend, and realization summaries for Cloudflare', () => {
+function captureOutput(logCapture: { calls: Array<{ args: unknown[] }> }) {
+  return logCapture.calls.map((call) =>
+    call.args.map((entry) => String(entry)).join(" ")
+  ).join("\n");
+}
+
+Deno.test("printTranslationReport - prints portable spec, runtime, and realization summaries", () => {
+  const logSpy = captureConsoleLog();
   try {
-  const report: TranslationReport = {
-      provider: 'cloudflare',
+    const report: TranslationReport = {
       supported: true,
-      requirements: ['CF_ACCOUNT_ID', 'CF_API_TOKEN'],
-      resources: [{ resolutionMode: 'cloudflare-native' }],
-      workloads: [{ status: 'native' }, { status: 'portable' }],
-      routes: [{ status: 'native' }],
+      requirements: [],
+      workloads: [{ status: "compatible" }, { status: "compatible" }],
+      routes: [{ status: "compatible" }],
       unsupported: [],
     };
 
-    const logSpy = stub(console, 'log') = () => {} as any;
     printTranslationReport(report);
     const output = captureOutput(logSpy);
 
-    assertStringIncludes(output, 'Spec:     Cloudflare-native');
-    assertStringIncludes(output, 'Runtime:  Takos runtime');
-    assertStringIncludes(output, 'Backend:  Cloudflare backend');
-    assertStringIncludes(output, 'supported');
-    assertStringIncludes(output, 'Needs:    CF_ACCOUNT_ID, CF_API_TOKEN');
-    assertStringIncludes(output, 'Resources: cloudflare-native=1');
-    assertStringIncludes(output, 'Workloads: native=1, portable=1');
-    assertStringIncludes(output, 'Routes:   native=1');
+    assertStringIncludes(output, "Spec:     Takos deploy manifest");
+    assertStringIncludes(output, "Runtime:  tenant runtime");
+    assertStringIncludes(output, "Surface:  Portable");
+    assertStringIncludes(output, "supported");
+    assertStringIncludes(output, "Workloads: compatible=2");
+    assertStringIncludes(output, "Routes:   compatible=1");
   } finally {
-  /* TODO: restore mocks manually */ void 0;
+    logSpy.restore();
   }
-})
-  Deno.test('printTranslationReport - prints blocked status and unsupported details for compatibility backends', () => {
+});
+Deno.test("printTranslationReport - prints blocked status and unsupported details", () => {
+  const logSpy = captureConsoleLog();
   try {
-  const report: TranslationReport = {
-      provider: 'aws',
+    const report: TranslationReport = {
       supported: false,
-      requirements: ['OCI_ORCHESTRATOR_URL'],
-      resources: [{ resolutionMode: 'provider-backed' }, { resolutionMode: 'takos-runtime' }],
-      workloads: [{ status: 'portable' }],
-      routes: [{ status: 'portable' }],
+      requirements: ["OCI_ORCHESTRATOR_URL"],
+      workloads: [{ status: "compatible" }],
+      routes: [{ status: "compatible" }],
       unsupported: [
         {
-          category: 'resource',
-          name: 'db',
-          message: 'd1 resolves to unknown (unsupported) on provider aws',
+          category: "workload",
+          name: "api",
+          message: "service is unsupported by the tenant runtime contract",
         },
       ],
     };
 
-    const logSpy = stub(console, 'log') = () => {} as any;
     printTranslationReport(report);
     const output = captureOutput(logSpy);
 
-    assertStringIncludes(output, 'Backend:  AWS compatibility backend');
-    assertStringIncludes(output, 'blocked');
-    assertStringIncludes(output, 'Needs:    OCI_ORCHESTRATOR_URL');
-    assertStringIncludes(output, 'Resources: provider-backed=1, takos-runtime=1');
-    assertStringIncludes(output, 'Workloads: portable=1');
-    assertStringIncludes(output, 'Routes:   portable=1');
-    assertStringIncludes(output, 'Blocked:');
-    assertStringIncludes(output, 'resource.db d1 resolves to unknown (unsupported) on provider aws');
+    assertStringIncludes(output, "Surface:  Portable");
+    assertStringIncludes(output, "blocked");
+    assertStringIncludes(output, "Needs:    OCI_ORCHESTRATOR_URL");
+    assertStringIncludes(output, "Workloads: compatible=1");
+    assertStringIncludes(output, "Routes:   compatible=1");
+    assertStringIncludes(output, "Blocked:");
+    assertStringIncludes(
+      output,
+      "workload.api service is unsupported by the tenant runtime contract",
+    );
   } finally {
-  /* TODO: restore mocks manually */ void 0;
+    logSpy.restore();
   }
-})
+});

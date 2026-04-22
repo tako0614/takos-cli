@@ -1,10 +1,26 @@
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHAR_PATTERN_GLOBAL = /[\u0000-\u001F\u007F]/g;
+function hasControlChars(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function stripControlChars(value: string): string {
+  let result = "";
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code > 0x1f && code !== 0x7f) {
+      result += value[i];
+    }
+  }
+  return result;
+}
 const CALLBACK_MESSAGE_MAX_LENGTH = 512;
-const INVALID_CALLBACK_PAYLOAD_MESSAGE = 'Invalid callback payload';
-const GENERIC_AUTH_FAILURE_MESSAGE = 'Authentication failed';
+const INVALID_CALLBACK_PAYLOAD_MESSAGE = "Invalid callback payload";
+const GENERIC_AUTH_FAILURE_MESSAGE = "Authentication failed";
 
 export interface CallbackParams {
   token: string | null;
@@ -13,16 +29,17 @@ export interface CallbackParams {
 }
 
 export const OAUTH_CALLBACK_FAILURE_CODES = {
-  CALLBACK_ERROR: 'callback_error',
-  INVALID_STATE: 'invalid_state',
-  MISSING_TOKEN: 'missing_token',
-  SERVER_ERROR: 'server_error',
-  UNEXPECTED_BIND_ADDRESS: 'unexpected_bind_address',
-  TIMEOUT: 'timeout',
+  CALLBACK_ERROR: "callback_error",
+  INVALID_STATE: "invalid_state",
+  MISSING_TOKEN: "missing_token",
+  SERVER_ERROR: "server_error",
+  UNEXPECTED_BIND_ADDRESS: "unexpected_bind_address",
+  TIMEOUT: "timeout",
 } as const;
 
-export type OAuthCallbackFailureCode =
-  (typeof OAUTH_CALLBACK_FAILURE_CODES)[keyof typeof OAUTH_CALLBACK_FAILURE_CODES];
+export type OAuthCallbackFailureCode = (typeof OAUTH_CALLBACK_FAILURE_CODES)[
+  keyof typeof OAUTH_CALLBACK_FAILURE_CODES
+];
 
 interface ResolveCallbackParamsInput {
   method: string | undefined;
@@ -42,7 +59,9 @@ interface CallbackValidationSuccess {
   token: string;
 }
 
-export type CallbackValidationResult = CallbackValidationFailure | CallbackValidationSuccess;
+export type CallbackValidationResult =
+  | CallbackValidationFailure
+  | CallbackValidationSuccess;
 
 interface RawCallbackPayload {
   token?: unknown;
@@ -57,15 +76,15 @@ interface NormalizedCallbackField {
 
 export function escapeHtml(value: string): string {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 export function normalizeAuthMessage(message: string): string {
-  const normalized = message.replace(CONTROL_CHAR_PATTERN_GLOBAL, '').trim();
+  const normalized = stripControlChars(message).trim();
   if (!normalized) {
     return GENERIC_AUTH_FAILURE_MESSAGE;
   }
@@ -83,7 +102,7 @@ export function sanitizeAuthMessageForHtml(message: string): string {
 
 export function sanitizeAuthMessageForLog(message: string): string {
   const normalized = normalizeAuthMessage(message);
-  return normalized.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  return normalized.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 function normalizeCallbackField(value: unknown): NormalizedCallbackField {
@@ -91,7 +110,7 @@ function normalizeCallbackField(value: unknown): NormalizedCallbackField {
     return { value: null, valid: true };
   }
 
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return { value: null, valid: false };
   }
 
@@ -99,14 +118,16 @@ function normalizeCallbackField(value: unknown): NormalizedCallbackField {
     return { value: null, valid: false };
   }
 
-  if (CONTROL_CHAR_PATTERN.test(value)) {
+  if (hasControlChars(value)) {
     return { value: null, valid: false };
   }
 
   return { value, valid: true };
 }
 
-function normalizeCallbackPayload(payload: RawCallbackPayload): CallbackParams | null {
+function normalizeCallbackPayload(
+  payload: RawCallbackPayload,
+): CallbackParams | null {
   const token = normalizeCallbackField(payload.token);
   const state = normalizeCallbackField(payload.state);
   const error = normalizeCallbackField(payload.error);
@@ -127,7 +148,7 @@ function parseJsonCallbackPayload(body: string | null): RawCallbackPayload {
     throw new Error(INVALID_CALLBACK_PAYLOAD_MESSAGE);
   }
   const parsed = JSON.parse(body);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error(INVALID_CALLBACK_PAYLOAD_MESSAGE);
   }
 
@@ -140,11 +161,11 @@ function parseJsonCallbackPayload(body: string | null): RawCallbackPayload {
 }
 
 function parseFormCallbackPayload(body: string | null): RawCallbackPayload {
-  const params = new URLSearchParams(body ?? '');
+  const params = new URLSearchParams(body ?? "");
   return {
-    token: params.get('token'),
-    state: params.get('state'),
-    error: params.get('error'),
+    token: params.get("token"),
+    state: params.get("state"),
+    error: params.get("error"),
   };
 }
 
@@ -153,7 +174,7 @@ export function resolveCallbackParams({
   contentType,
   body,
 }: ResolveCallbackParamsInput): CallbackParams {
-  if (method !== 'POST') {
+  if (method !== "POST") {
     return {
       token: null,
       state: null,
@@ -162,7 +183,7 @@ export function resolveCallbackParams({
   }
 
   try {
-    const rawPayload = contentType.includes('application/json')
+    const rawPayload = contentType.includes("application/json")
       ? parseJsonCallbackPayload(body)
       : parseFormCallbackPayload(body);
 
@@ -198,8 +219,8 @@ export function validateCallbackPayload(
     return {
       ok: false,
       code: OAUTH_CALLBACK_FAILURE_CODES.INVALID_STATE,
-      pageMessage: 'Invalid state parameter - possible CSRF attack.',
-      logMessage: 'Invalid state parameter (CSRF protection triggered)',
+      pageMessage: "Invalid state parameter - possible CSRF attack.",
+      logMessage: "Invalid state parameter (CSRF protection triggered)",
     };
   }
 
@@ -216,8 +237,8 @@ export function validateCallbackPayload(
     return {
       ok: false,
       code: OAUTH_CALLBACK_FAILURE_CODES.MISSING_TOKEN,
-      pageMessage: 'No token received',
-      logMessage: 'No token received',
+      pageMessage: "No token received",
+      logMessage: "No token received",
     };
   }
 

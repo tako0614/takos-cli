@@ -1,458 +1,330 @@
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, symlinkSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir, platform } from 'node:os';
-import { findSessionFile, isWindows, setSecurePermissions } from '../src/lib/config-session-io.ts';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { platform, tmpdir } from "node:os";
+import { join } from "node:path";
+import { assertEquals, assertNotEquals } from "jsr:@std/assert";
+import {
+  findSessionFile,
+  isWindows,
+  setSecurePermissions,
+} from "../src/lib/config-session-io.ts";
 
-import { assertEquals, assertNotEquals } from 'jsr:@std/assert';
+const VALID_SESSION_ID = "550e8400-e29b-41d4-a716-446655440000";
+const IS_WINDOWS = platform() === "win32";
 
-let originalCwd: string;
-let tempDirs: string[] = [];
-
-function createTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'takos-cli-session-io-'));
-  tempDirs.push(dir);
-  return dir;
+function withTempCwd(fn: (dir: string) => void): void {
+  const originalCwd = process.cwd();
+  const dir = mkdtempSync(join(tmpdir(), "takos-cli-session-io-"));
+  try {
+    process.chdir(dir);
+    fn(dir);
+  } finally {
+    process.chdir(originalCwd);
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
-function createSessionFile(dir: string, content: string, mode?: number): string {
-  const sessionPath = join(dir, '.takos-session');
+function createSessionFile(
+  dir: string,
+  content: string,
+  mode?: number,
+): string {
+  const sessionPath = join(dir, ".takos-session");
   writeFileSync(sessionPath, content, { mode: mode ?? 0o600 });
   return sessionPath;
 }
-// ---------------------------------------------------------------------------
-// isWindows
-// ---------------------------------------------------------------------------
 
+Deno.test("isWindows - returns boolean based on platform", () => {
+  assertEquals(typeof isWindows(), "boolean");
+  assertEquals(isWindows(), IS_WINDOWS);
+});
 
-  Deno.test('isWindows - returns boolean based on platform', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  assertEquals(typeof isWindows(), 'boolean');
-    // On test platform, we know what this should be
-    assertEquals(isWindows(), platform() === 'win32');
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-// ---------------------------------------------------------------------------
-// findSessionFile - basic discovery
-// ---------------------------------------------------------------------------
-
-
-  const validSessionId = '550e8400-e29b-41d4-a716-446655440000';
-
-  Deno.test('findSessionFile - returns null when no session file exists', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    process.chdir(dir);
+Deno.test("findSessionFile - returns null when no session file exists", () =>
+  withTempCwd(() => {
     assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile - finds session file in current directory', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-    }));
-    process.chdir(dir);
+  }));
+
+Deno.test("findSessionFile - finds session file in current directory", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-test",
+      }),
+    );
 
     const result = findSessionFile();
     assertNotEquals(result, null);
-    assertEquals(result!.session_id, validSessionId);
-    assertEquals(result!.workspace_id, 'ws-test');
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile - walks up directory tree to find session file', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const parentDir = createTempDir();
-    createSessionFile(parentDir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-parent',
-    }));
+    assertEquals(result!.session_id, VALID_SESSION_ID);
+    assertEquals(result!.space_id, "space-test");
+  }));
 
-    const childDir = join(parentDir, 'child');
+Deno.test("findSessionFile - walks up directory tree to find session file", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-parent",
+      }),
+    );
+    const childDir = join(dir, "child");
     mkdirSync(childDir, { recursive: true });
     process.chdir(childDir);
 
     const result = findSessionFile();
     assertNotEquals(result, null);
-    assertEquals(result!.workspace_id, 'ws-parent');
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile - prefers closest session file in tree', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const parentDir = createTempDir();
-    createSessionFile(parentDir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-parent',
-    }));
+    assertEquals(result!.space_id, "space-parent");
+  }));
 
-    const childDir = join(parentDir, 'child');
+Deno.test("findSessionFile - prefers closest session file in tree", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-parent",
+      }),
+    );
+    const childDir = join(dir, "child");
     mkdirSync(childDir, { recursive: true });
-    createSessionFile(childDir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-child',
-    }));
-
+    createSessionFile(
+      childDir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-child",
+      }),
+    );
     process.chdir(childDir);
-    const result = findSessionFile();
-    assertNotEquals(result, null);
-    assertEquals(result!.workspace_id, 'ws-child');
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-// ---------------------------------------------------------------------------
-// findSessionFile - validation
-// ---------------------------------------------------------------------------
-
-
-  const validSessionId = '550e8400-e29b-41d4-a716-446655440000';
-
-  Deno.test('findSessionFile validation - rejects session file with missing session_id', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({ workspace_id: 'ws-test' }));
-    process.chdir(dir);
-
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - rejects session file with non-string session_id', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: 123,
-      workspace_id: 'ws-test',
-    }));
-    process.chdir(dir);
-
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - rejects session file with invalid session_id format', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: 'invalid!@#$%',
-      workspace_id: 'ws-test',
-    }));
-    process.chdir(dir);
-
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - rejects session file with non-string workspace_id', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 123,
-    }));
-    process.chdir(dir);
-
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - rejects session file with non-string api_url', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-      api_url: 123,
-    }));
-    process.chdir(dir);
-
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - rejects session file with malformed api_url', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-      api_url: 'not a url',
-    }));
-    process.chdir(dir);
-
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - clears invalid API domain from session file (falls back to empty)', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-      api_url: 'http://evil.example.com',
-    }));
-    process.chdir(dir);
 
     const result = findSessionFile();
     assertNotEquals(result, null);
-    assertEquals(result!.api_url, '');
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - preserves valid API URL from session file', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-      api_url: 'https://api.takos.dev',
-    }));
-    process.chdir(dir);
+    assertEquals(result!.space_id, "space-child");
+  }));
+
+Deno.test("findSessionFile validation - rejects session file with missing session_id", () =>
+  withTempCwd((dir) => {
+    createSessionFile(dir, JSON.stringify({ space_id: "space-test" }));
+    assertEquals(findSessionFile(), null);
+  }));
+
+Deno.test("findSessionFile validation - rejects session file with non-string session_id", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: 123,
+        space_id: "space-test",
+      }),
+    );
+    assertEquals(findSessionFile(), null);
+  }));
+
+Deno.test("findSessionFile validation - rejects session file with invalid session_id format", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: "invalid!@#$%",
+        space_id: "space-test",
+      }),
+    );
+    assertEquals(findSessionFile(), null);
+  }));
+
+Deno.test("findSessionFile validation - rejects session file with short session_id", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: "short",
+        space_id: "space-test",
+      }),
+    );
+    assertEquals(findSessionFile(), null);
+  }));
+
+Deno.test("findSessionFile validation - rejects session file with non-string space_id", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: 123,
+      }),
+    );
+    assertEquals(findSessionFile(), null);
+  }));
+
+Deno.test("findSessionFile validation - rejects session file with non-string api_url", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-test",
+        api_url: 123,
+      }),
+    );
+    assertEquals(findSessionFile(), null);
+  }));
+
+Deno.test("findSessionFile validation - rejects session file with malformed api_url", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-test",
+        api_url: "not a url",
+      }),
+    );
+    assertEquals(findSessionFile(), null);
+  }));
+
+Deno.test("findSessionFile validation - clears invalid API scheme from session file", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-test",
+        api_url: "ftp://evil.example.com",
+      }),
+    );
 
     const result = findSessionFile();
     assertNotEquals(result, null);
-    assertEquals(result!.api_url, 'https://api.takos.dev');
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - rejects invalid JSON in session file', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, '{invalid json}}}');
-    process.chdir(dir);
+    assertEquals(result!.api_url, "");
+  }));
 
+Deno.test("findSessionFile validation - preserves valid API URL from session file", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+        space_id: "space-test",
+        api_url: "https://custom.example.com",
+      }),
+    );
+
+    const result = findSessionFile();
+    assertNotEquals(result, null);
+    assertEquals(result!.api_url, "https://custom.example.com");
+  }));
+
+Deno.test("findSessionFile validation - rejects invalid JSON in session file", () =>
+  withTempCwd((dir) => {
+    createSessionFile(dir, "{invalid json}}}");
     assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - rejects non-object JSON in session file', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
+  }));
+
+Deno.test("findSessionFile validation - rejects non-object JSON in session file", () =>
+  withTempCwd((dir) => {
     createSessionFile(dir, '"just a string"');
-    process.chdir(dir);
-
     assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('findSessionFile validation - handles empty workspace_id gracefully', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-    }));
-    process.chdir(dir);
+  }));
+
+Deno.test("findSessionFile validation - handles empty space_id gracefully", () =>
+  withTempCwd((dir) => {
+    createSessionFile(
+      dir,
+      JSON.stringify({
+        session_id: VALID_SESSION_ID,
+      }),
+    );
 
     const result = findSessionFile();
     assertNotEquals(result, null);
-    assertEquals(result!.workspace_id, '');
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-// ---------------------------------------------------------------------------
-// findSessionFile - permission checks (skip on Windows)
-// ---------------------------------------------------------------------------
+    assertEquals(result!.space_id, "");
+  }));
 
-const describeUnix = platform() === 'win32' ? describe.skip : describe;
+Deno.test({
+  name: "findSessionFile permission checks - rejects world-readable files",
+  ignore: IS_WINDOWS,
+  fn() {
+    withTempCwd((dir) => {
+      createSessionFile(
+        dir,
+        JSON.stringify({
+          session_id: VALID_SESSION_ID,
+          space_id: "space-test",
+        }),
+        0o644,
+      );
+      assertEquals(findSessionFile(), null);
+    });
+  },
+});
 
-describeUnix('findSessionFile permission checks', () => {
-  const validSessionId = '550e8400-e29b-41d4-a716-446655440000';
+Deno.test({
+  name: "findSessionFile permission checks - rejects group-readable files",
+  ignore: IS_WINDOWS,
+  fn() {
+    withTempCwd((dir) => {
+      createSessionFile(
+        dir,
+        JSON.stringify({
+          session_id: VALID_SESSION_ID,
+          space_id: "space-test",
+        }),
+        0o640,
+      );
+      assertEquals(findSessionFile(), null);
+    });
+  },
+});
 
-  Deno.test('rejects session file with world-readable permissions', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    const sessionPath = createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-    }), 0o644);
-    process.chdir(dir);
+Deno.test({
+  name: "findSessionFile permission checks - accepts mode 600",
+  ignore: IS_WINDOWS,
+  fn() {
+    withTempCwd((dir) => {
+      createSessionFile(
+        dir,
+        JSON.stringify({
+          session_id: VALID_SESSION_ID,
+          space_id: "space-test",
+        }),
+        0o600,
+      );
 
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('rejects session file with group-readable permissions', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    const sessionPath = createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-    }), 0o640);
-    process.chdir(dir);
+      const result = findSessionFile();
+      assertNotEquals(result, null);
+      assertEquals(result!.session_id, VALID_SESSION_ID);
+    });
+  },
+});
 
-    assertEquals(findSessionFile(), null);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('accepts session file with mode 600', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    createSessionFile(dir, JSON.stringify({
-      session_id: validSessionId,
-      workspace_id: 'ws-test',
-    }), 0o600);
-    process.chdir(dir);
+Deno.test({
+  name: "setSecurePermissions - does not throw for nonexistent file",
+  ignore: IS_WINDOWS,
+  fn() {
+    withTempCwd((dir) => {
+      setSecurePermissions(join(dir, "nonexistent"));
+    });
+  },
+});
 
-    const result = findSessionFile();
-    assertNotEquals(result, null);
-    assertEquals(result!.session_id, validSessionId);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})});
+Deno.test({
+  name: "setSecurePermissions - sets file to mode 600",
+  ignore: IS_WINDOWS,
+  fn() {
+    withTempCwd((dir) => {
+      const filePath = join(dir, "test-file");
+      writeFileSync(filePath, "test", { mode: 0o644 });
 
-// ---------------------------------------------------------------------------
-// setSecurePermissions
-// ---------------------------------------------------------------------------
+      setSecurePermissions(filePath);
 
-describeUnix('setSecurePermissions', () => {
-  Deno.test('does not throw for nonexistent file', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    try { () => setSecurePermissions(join(dir, 'nonexistent')); } catch (_e) { throw new Error('Expected no throw'); };
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})
-  Deno.test('sets file to mode 600', () => {
-  originalCwd = process.cwd();
-  tempDirs = [];
-  try {
-  const dir = createTempDir();
-    const filePath = join(dir, 'test-file');
-    writeFileSync(filePath, 'test', { mode: 0o644 });
-
-    setSecurePermissions(filePath);
-
-    const { statSync } = require('fs');
-    const mode = statSync(filePath).mode & 0o777;
-    assertEquals(mode, 0o600);
-  } finally {
-  process.chdir(originalCwd);
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  }
-})});
+      const mode = statSync(filePath).mode & 0o777;
+      assertEquals(mode, 0o600);
+    });
+  },
+});

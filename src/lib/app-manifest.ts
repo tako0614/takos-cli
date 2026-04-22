@@ -1,17 +1,18 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import type { AppManifest } from 'takos-control/source/app-manifest';
+import fs from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+import type { AppManifest as ParsedAppManifest } from "takos-control/source/app-manifest";
 import {
-  parseAppManifestYaml,
   parseAndValidateWorkflowYaml,
+  parseAppManifestYaml as parseCanonicalAppManifestYaml,
   validateDeployProducerJob,
-} from 'takos-control/source/app-manifest';
+} from "takos-control/source/app-manifest";
 
-export type { AppManifest } from 'takos-control/source/app-manifest';
+export type AppManifest = ParsedAppManifest;
 
 const APP_MANIFEST_FILE_NAMES = [
-  path.join('.takos', 'app.yml'),
-  path.join('.takos', 'app.yaml'),
+  path.join(".takos", "app.yml"),
+  path.join(".takos", "app.yaml"),
 ];
 
 export async function findAppManifestFile(dir: string): Promise<string | null> {
@@ -27,26 +28,32 @@ export async function findAppManifestFile(dir: string): Promise<string | null> {
   return null;
 }
 
-export async function loadAppManifest(manifestPath: string): Promise<AppManifest> {
+export async function loadAppManifest(
+  manifestPath: string,
+): Promise<AppManifest> {
   const absolutePath = path.resolve(manifestPath);
-  const raw = await fs.readFile(absolutePath, 'utf8');
-  return parseAppManifestYaml(raw);
+  const raw = await fs.readFile(absolutePath, "utf8");
+  return parseCanonicalAppManifestYaml(raw);
 }
 
-export async function resolveAppManifestPath(startDir = process.cwd()): Promise<string> {
+export async function resolveAppManifestPath(
+  startDir = process.cwd(),
+): Promise<string> {
   const manifestPath = await findAppManifestFile(startDir);
   if (!manifestPath) {
-    throw new Error('No .takos/app.yml found in the current directory');
+    throw new Error(
+      "No .takos/app.yml or .takos/app.yaml found in the current directory",
+    );
   }
   return manifestPath;
 }
 
 function normalizeWorkflowPath(workflowPath: string): string {
   return workflowPath
-    .replace(/\\/g, '/')
-    .replace(/^\.\/+/, '')
-    .replace(/^\/+/, '')
-    .replace(/\/{2,}/g, '/')
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .replace(/^\/+/, "")
+    .replace(/\/{2,}/g, "/")
     .trim();
 }
 
@@ -57,19 +64,24 @@ async function validateDeployWorkflowJob(
 ): Promise<void> {
   const normalizedPath = normalizeWorkflowPath(workflowPath);
   if (!normalizedPath) {
-    throw new Error('Workflow path is required');
+    throw new Error("Workflow path is required");
   }
-  if (normalizedPath.includes('..')) {
-    throw new Error(`Workflow path must not contain path traversal: ${normalizedPath}`);
+  if (normalizedPath.includes("..")) {
+    throw new Error(
+      `Workflow path must not contain path traversal: ${normalizedPath}`,
+    );
   }
 
   const absolutePath = path.resolve(repoRoot, normalizedPath);
   const resolvedRoot = path.resolve(repoRoot);
-  if (!absolutePath.startsWith(resolvedRoot + path.sep) && absolutePath !== resolvedRoot) {
+  if (
+    !absolutePath.startsWith(resolvedRoot + path.sep) &&
+    absolutePath !== resolvedRoot
+  ) {
     throw new Error(`Workflow path escapes repository root: ${normalizedPath}`);
   }
 
-  const raw = await fs.readFile(absolutePath, 'utf8').catch(() => {
+  const raw = await fs.readFile(absolutePath, "utf8").catch(() => {
     throw new Error(`Workflow file not found: ${normalizedPath}`);
   });
 
@@ -82,14 +94,9 @@ export async function validateAppManifest(startDir = process.cwd()) {
   const manifest = await loadAppManifest(manifestPath);
   const repoRoot = path.dirname(path.dirname(manifestPath));
 
-  for (const [workerName, worker] of Object.entries(manifest.spec.workers ?? {})) {
-    const build = worker.build?.fromWorkflow;
-    if (!build) {
-      throw new Error(`spec.workers.${workerName}.build.fromWorkflow is required`);
-    }
-    if (!build.artifactPath) {
-      throw new Error(`spec.workers.${workerName}.build.fromWorkflow.artifactPath is required`);
-    }
+  for (const compute of Object.values(manifest.compute ?? {})) {
+    const build = compute.build?.fromWorkflow;
+    if (!build) continue;
     await validateDeployWorkflowJob(repoRoot, build.path, build.job);
   }
 

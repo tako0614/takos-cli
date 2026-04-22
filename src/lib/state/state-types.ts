@@ -7,7 +7,6 @@ export interface RouteState {
 
 export interface TakosState {
   version: number;
-  provider: string; // 'cloudflare' | 'aws' | 'gcp' | 'k8s' | 'docker'
   env: string;
   group: string;
   groupName: string;

@@ -1,1 +1,1 @@
-export type { AppManifest } from '../source/app-manifest-types.ts';
+export type { AppManifest } from "../source/app-manifest-types.ts";

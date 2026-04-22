@@ -1,35 +1,33 @@
 export type {
+  AppCompute,
+  AppConsume,
   AppManifest,
-  AppContainer,
-  AppService,
-  AppWorker,
-  AppEnvConfig,
+  AppManifestOverride,
+  AppPublication,
+  AppResource,
+  AppResourceBinding,
+  AppResourceType,
   AppRoute,
-  AppDeploymentBuildSource,
+  AppTriggers,
+  BuildConfig,
   BundleDoc,
+  CloudflareComputeConfig,
+  CloudflareContainerConfig,
+  CloudflareContainerInstanceType,
+  ComputeKind,
+  GroupDeploymentSnapshotBuildSource,
   HealthCheck,
-  LifecycleHook,
-  LifecycleHooks,
-  UpdateStrategy,
-  ServiceBinding,
-  EnvironmentOverrides,
-  Volume,
-  WorkerScaling,
-  ResourceLimits
-} from './app-manifest-types.ts';
+  QueueTrigger,
+  ScheduleTrigger,
+  VolumeMount,
+} from "./app-manifest-types.ts";
 
 export {
+  parseAppManifestText,
   parseAppManifestYaml,
-  parseAppManifestText
-} from './app-manifest-parser/index.ts';
-
-export {
-  resolveTemplates,
-  validateTemplateReferences,
-  type TemplateContext
-} from './app-manifest-template.ts';
+} from "./app-manifest-parser/index.ts";
 
 export {
   parseAndValidateWorkflowYaml,
-  validateDeployProducerJob
-} from './app-manifest-validation.ts';
+  validateDeployProducerJob,
+} from "./app-manifest-validation.ts";

@@ -18,11 +18,12 @@
   "tasks": {
     "dev": "deno run --allow-all --watch src/index.ts",
     "start": "deno run --allow-all src/index.ts",
+    "check": "deno check src/**/*.ts test/**/*.ts",
     "test": "deno test --allow-all src/ test/",
     "test:coverage": "deno test --allow-all --coverage=coverage src/ test/",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
-    "lint": "deno lint",
+    "lint": "deno lint src/ shims/",
     "compile": "deno compile --allow-all --output takos src/index.ts"
   },
   "publish": {
@@ -33,7 +34,6 @@
       "shims/",
       "deno.json",
       "README.md",
-      "README.ja.md",
       "LICENSE"
     ]
   }

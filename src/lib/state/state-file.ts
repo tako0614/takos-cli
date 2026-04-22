@@ -1,30 +1,24 @@
 /**
- * State file management — unified API + file fallback.
+ * State file management — API by default, file mode only when requested.
  *
  * Default behaviour:
- *   - When the takos API is reachable and authenticated, state is
- *     read/written via the API (see ./api-client.ts).
- *   - When the API is unavailable (offline, local dev, no credentials)
- *     or when `opts.offline` is explicitly set, the file-based backend
- *     (.takos/state.{group}.json) is used instead.
- *   - The fallback is silent — no login prompt or error is shown when
- *     the API is simply not available (covers CF-token-only workflows
- *     and self-hosted environments without a takos API).
+ *   - State is read/written via the takos API (see ./api-client.ts).
+ *   - The file-based backend (.takos/state.{group}.json) is used only
+ *     when `opts.offline` is explicitly set.
  *
  * The file-based helpers (`readStateFromFile`, `writeStateToFile`, etc.)
- * are still exported for direct use in tests and migration tooling.
+ * are exported for direct use in tests and explicit offline workflows.
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import type { TakosState } from './state-types.ts';
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { TakosState } from "./state-types.ts";
 import {
-  hasApiEndpoint,
-  readGroupStateFromApi,
-  writeGroupStateToApi,
   deleteGroupStateFromApi,
   listGroupsFromApi,
-} from './api-client.ts';
+  readGroupStateFromApi,
+  writeGroupStateToApi,
+} from "./api-client.ts";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -42,14 +36,14 @@ export interface StateAccessOptions {
 }
 
 // ---------------------------------------------------------------------------
-// File-based helpers (fallback / legacy)
+// File-based helpers (offline mode)
 // ---------------------------------------------------------------------------
 
 /**
  * .takos ディレクトリのパスを返す（state ファイルの格納先）。
  */
 export function getStateDir(manifestDir: string): string {
-  return path.join(manifestDir, '.takos');
+  return path.join(manifestDir, ".takos");
 }
 
 /**
@@ -62,13 +56,16 @@ export function getStateFilePath(stateDir: string, group: string): string {
 /**
  * state.{group}.json を読み込む。ファイルがなければ null を返す（初回 apply）。
  */
-export async function readStateFromFile(stateDir: string, group: string): Promise<TakosState | null> {
+export async function readStateFromFile(
+  stateDir: string,
+  group: string,
+): Promise<TakosState | null> {
   const filePath = getStateFilePath(stateDir, group);
   try {
-    const raw = await fs.readFile(filePath, 'utf8');
+    const raw = await fs.readFile(filePath, "utf8");
     return JSON.parse(raw) as TakosState;
   } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
     }
     throw err;
@@ -100,7 +97,7 @@ export async function writeStateToFile(
     if (current && current.version !== expectedVersion) {
       throw new Error(
         `State conflict: expected version ${expectedVersion}, got ${current.version}. ` +
-          'Another operation may have modified the state. Re-read and retry.',
+          "Another operation may have modified the state. Re-read and retry.",
       );
     }
   }
@@ -109,18 +106,21 @@ export async function writeStateToFile(
   state.version = (state.version || 0) + 1;
   state.updatedAt = new Date().toISOString();
 
-  await fs.writeFile(filePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  await fs.writeFile(filePath, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 
 /**
  * state ファイルを削除する。
  */
-export async function deleteStateFromFile(stateDir: string, group: string): Promise<void> {
+export async function deleteStateFromFile(
+  stateDir: string,
+  group: string,
+): Promise<void> {
   const filePath = getStateFilePath(stateDir, group);
   try {
     await fs.unlink(filePath);
   } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return; // already gone
     }
     throw err;
@@ -130,7 +130,9 @@ export async function deleteStateFromFile(stateDir: string, group: string): Prom
 /**
  * .takos/ 内の state.*.json をスキャンして group 名一覧を返す。
  */
-export async function listStateGroupsFromFile(stateDir: string): Promise<string[]> {
+export async function listStateGroupsFromFile(
+  stateDir: string,
+): Promise<string[]> {
   let files: string[];
   try {
     files = await fs.readdir(stateDir);
@@ -139,29 +141,20 @@ export async function listStateGroupsFromFile(stateDir: string): Promise<string[
   }
   const groups: string[] = [];
   for (const f of files) {
-    if (f.startsWith('state.') && f.endsWith('.json')) {
-      groups.push(f.slice('state.'.length, -'.json'.length));
+    if (f.startsWith("state.") && f.endsWith(".json")) {
+      groups.push(f.slice("state.".length, -".json".length));
     }
   }
   return groups.sort();
 }
 
 // ---------------------------------------------------------------------------
-// Unified API — chooses API or file automatically
+// Unified API — uses file mode only when explicitly requested
 // ---------------------------------------------------------------------------
 
-function useApi(opts?: StateAccessOptions): boolean {
-  if (opts?.offline) return false;
-  return hasApiEndpoint();
-}
-
 /**
- * Read state for a group. Uses the API when available; falls back to
- * local file when offline or unauthenticated.
- *
- * The fallback is silent — no error is shown when the API is not
- * available. This covers CF-token-only workflows and self-hosted
- * environments without a takos API.
+ * Read state for a group. Uses the API by default and the local file
+ * backend only when offline mode is explicit.
  *
  * @param stateDir  Path to .takos directory (used only in file mode)
  * @param group     Group name
@@ -172,20 +165,15 @@ export async function readState(
   group: string,
   opts?: StateAccessOptions,
 ): Promise<TakosState | null> {
-  if (useApi(opts)) {
-    try {
-      return await readGroupStateFromApi(group);
-    } catch {
-      // API unreachable — fall through to file silently
-    }
+  if (opts?.offline) {
+    return readStateFromFile(stateDir, group);
   }
-  return readStateFromFile(stateDir, group);
+  return await readGroupStateFromApi(group);
 }
 
 /**
- * Write state for a group. Uses the API when available; falls back to
- * local file when offline or unauthenticated.
- * When the API is used, a local file copy is also written for caching.
+ * Write state for a group. Uses the API by default and the local file
+ * backend only when offline mode is explicit.
  *
  * In file mode, if `opts.expectedVersion` is set, an optimistic lock
  * check is performed before writing.
@@ -196,57 +184,40 @@ export async function writeState(
   state: TakosState,
   opts?: StateAccessOptions,
 ): Promise<void> {
-  if (useApi(opts)) {
-    try {
-      await writeGroupStateToApi(group, state);
-      // Also write locally as a cache (non-critical — log and continue on failure)
-      await writeStateToFile(stateDir, group, state).catch((err) => {
-        process.stderr.write(`Warning: failed to write local state cache: ${err instanceof Error ? err.message : String(err)}\n`);
-      });
-      return;
-    } catch {
-      // API unreachable — fall through to file silently
-    }
+  if (opts?.offline) {
+    await writeStateToFile(stateDir, group, state, opts.expectedVersion);
+    return;
   }
-  await writeStateToFile(stateDir, group, state, opts?.expectedVersion);
+  await writeGroupStateToApi(group, state);
 }
 
 /**
- * Delete state for a group. Uses the API when available; falls back to
- * local file when offline or unauthenticated.
+ * Delete state for a group. Uses the API by default and the local file
+ * backend only when offline mode is explicit.
  */
 export async function deleteStateFile(
   stateDir: string,
   group: string,
   opts?: StateAccessOptions,
 ): Promise<void> {
-  if (useApi(opts)) {
-    try {
-      await deleteGroupStateFromApi(group);
-      // Also remove local file
-      await deleteStateFromFile(stateDir, group).catch(() => {});
-      return;
-    } catch {
-      // API unreachable — fall through to file silently
-    }
+  if (opts?.offline) {
+    await deleteStateFromFile(stateDir, group);
+    return;
   }
-  await deleteStateFromFile(stateDir, group);
+  await deleteGroupStateFromApi(group);
+  await deleteStateFromFile(stateDir, group).catch(() => {});
 }
 
 /**
- * List all group names. Uses the API when available; falls back to
- * scanning local files when offline or unauthenticated.
+ * List all group names. Uses the API by default and scans local files
+ * only when offline mode is explicit.
  */
 export async function listStateGroups(
   stateDir: string,
   opts?: StateAccessOptions,
 ): Promise<string[]> {
-  if (useApi(opts)) {
-    try {
-      return await listGroupsFromApi();
-    } catch {
-      // API unreachable — fall through to file silently
-    }
+  if (opts?.offline) {
+    return listStateGroupsFromFile(stateDir);
   }
-  return listStateGroupsFromFile(stateDir);
+  return await listGroupsFromApi();
 }

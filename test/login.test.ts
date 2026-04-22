@@ -1,383 +1,211 @@
-import { Buffer } from 'node:buffer';
-import { Command } from 'commander';
-import { CliCommandExit } from '../src/lib/command-exit.ts';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Command } from "commander";
+import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { stub } from "jsr:@std/testing/mock";
+import {
+  type LoginCommandDependencies,
+  registerLoginCommand,
+} from "../src/commands/login.ts";
+import type { RunOAuthCallbackServerOptions } from "../src/commands/login-oauth-callback.ts";
+import { CliCommandExit } from "../src/lib/command-exit.ts";
 
-import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
-import { stub, assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
-import { FakeTime } from 'jsr:@std/testing/time';
+const MANAGED_ENV_VARS = [
+  "TAKOS_SESSION_ID",
+  "TAKOS_TOKEN",
+  "TAKOS_API_URL",
+  "TAKOS_SPACE_ID",
+  "TAKOS_CONFIG_DIR",
+] as const;
 
-const loginMocks = {
-  const saveTokenMock = ((..._args: any[]) => undefined) as any;
-  const saveApiUrlMock = ((..._args: any[]) => undefined) as any;
-  const clearCredentialsMock = ((..._args: any[]) => undefined) as any;
-  const isContainerModeMock = () => false;
-  const validateApiUrlMock = () => ({ valid: true });
-  const getConfigMock = () => ({ apiUrl: 'https://takos.jp' });
-  const getLoginTimeoutMsMock = () => 5 * 60 * 1000;
-  const openMock = (async () => undefined);
+type ManagedEnvVar = typeof MANAGED_ENV_VARS[number];
 
-  let requestHandler: ((req: any, res: any) => Promise<void>) | undefined;
+async function withIsolatedConfig(
+  fn: (configDir: string) => Promise<void> | void,
+): Promise<void> {
+  const originalEnv: Record<ManagedEnvVar, string | undefined> = {} as Record<
+    ManagedEnvVar,
+    string | undefined
+  >;
+  for (const envVar of MANAGED_ENV_VARS) {
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
+  }
 
-  const server = {
-    on: (event: string, handler: (...args: any[]) => void) => {
-      if (event === 'request') {
-        requestHandler = handler as (req: any, res: any) => Promise<void>;
+  const configDir = mkdtempSync(join(tmpdir(), "takos-cli-login-config-"));
+  Deno.env.set("TAKOS_CONFIG_DIR", configDir);
+
+  try {
+    await fn(configDir);
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+    for (const envVar of MANAGED_ENV_VARS) {
+      const originalValue = originalEnv[envVar];
+      if (originalValue === undefined) {
+        Deno.env.delete(envVar);
+      } else {
+        Deno.env.set(envVar, originalValue);
       }
-    },
-    listen: (_port: number, _host: string, callback: () => void) => {
-      callback();
-    },
-    address: () => ({ address: '127.0.0.1', port: 43123 }),
-    close: (callback: (err?: Error | null) => void) => {
-      callback();
-    },
-  };
-
-  const createServerMock = () => {
-    return server;
-  };
-
-  return {
-    saveTokenMock,
-    saveApiUrlMock,
-    clearCredentialsMock,
-    isContainerModeMock,
-    validateApiUrlMock,
-    getConfigMock,
-    getLoginTimeoutMsMock,
-    openMock,
-    createServerMock,
-    serverListenMock: server.listen,
-    getRequestHandler: () => requestHandler,
-    resetRequestHandler: () => {
-      requestHandler = undefined;
-    },
-  };
-};
-
-// [Deno] vi.mock removed - manually stub imports from '../src/lib/config.ts'
-// [Deno] vi.mock removed - manually stub imports from 'node:http'
-// [Deno] vi.mock removed - manually stub imports from 'open'
-import { registerLoginCommand } from '../src/commands/login.ts';
-
-function createJsonCallbackRequest(payload: Record<string, unknown>): any {
-  const body = Buffer.from(JSON.stringify(payload));
-  return {
-    method: 'POST',
-    url: '/callback',
-    headers: {
-      'content-type': 'application/json',
-    },
-    async *[Symbol.asyncIterator]() {
-      yield body;
-    },
-  };
+    }
+  }
 }
 
-function createGetCallbackRequest(url: string): any {
-  return {
-    method: 'GET',
-    url,
-    headers: {},
-    async *[Symbol.asyncIterator]() {
-      // GET callback must not rely on request body.
-    },
-  };
+function readStoredConfig(configDir: string): Record<string, unknown> {
+  try {
+    return JSON.parse(
+      readFileSync(join(configDir, "config.json"), "utf-8"),
+    ) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
+function writeStoredConfig(
+  configDir: string,
+  config: Record<string, unknown>,
+): void {
+  writeFileSync(join(configDir, "config.json"), JSON.stringify(config));
+}
 
-  Deno.test('login command - persists apiUrl after successful login with --api-url', async () => {
-  new FakeTime();
-    loginMocks.saveTokenMock;
-    loginMocks.saveApiUrlMock;
-    loginMocks.clearCredentialsMock;
-    loginMocks.isContainerModeMock;
-    loginMocks.isContainerModeMock = (() => false) as any;
-    loginMocks.validateApiUrlMock;
-    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
-    loginMocks.getConfigMock;
-    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
-    loginMocks.getLoginTimeoutMsMock;
-    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
-    loginMocks.openMock;
-    loginMocks.openMock = (async () => undefined) as any;
-    loginMocks.createServerMock;
-    loginMocks.resetRequestHandler();
-  try {
-  const logSpy = stub(console, 'log');
+function registerTestLoginCommand(
+  token: string | null,
+  onRun?: (options: RunOAuthCallbackServerOptions) => void,
+) {
+  const calls: RunOAuthCallbackServerOptions[] = [];
+  const dependencies: LoginCommandDependencies = {
+    openAuthUrl: async () => {},
+    runOAuthCallbackServer: (options) => {
+      calls.push(options);
+      onRun?.(options);
+      return Promise.resolve(token);
+    },
+  };
+  const program = new Command();
+  registerLoginCommand(program, dependencies);
+  return { program, calls };
+}
 
-    const program = new Command();
-    registerLoginCommand(program);
-    const parsePromise = program.parseAsync([
-      'node',
-      'takos',
-      'login',
-      '--api-url',
-      'https://api.takos.dev',
-    ]);
+Deno.test("login command - persists apiUrl after successful login with --api-url", async () =>
+  await withIsolatedConfig(async (configDir) => {
+    const logSpy = stub(console, "log");
+    try {
+      const { program, calls } = registerTestLoginCommand("test-token");
 
-    await Promise.resolve();
+      await program.parseAsync([
+        "node",
+        "takos",
+        "login",
+        "--api-url",
+        "https://api.takos.jp",
+      ]);
 
-    assertSpyCalls(loginMocks.serverListenMock, 1);
-    const [boundPort, bindAddress] = loginMocks.serverListenMock.calls[0] as [number, string];
-    assertEquals(bindAddress, '127.0.0.1');
-    assertEquals(boundPort, 0);
+      assertEquals(calls.length, 1);
+      assertEquals(calls[0].apiUrl, "https://api.takos.jp");
+      assertEquals(calls[0].oauthState.length, 64);
+      const storedConfig = readStoredConfig(configDir);
+      assertEquals(storedConfig.token, "test-token");
+      assertEquals(storedConfig.apiUrl, "https://api.takos.jp");
+    } finally {
+      logSpy.restore();
+    }
+  }));
 
-    const authUrlLine = logSpy.calls
-      .map((args) => args.map((arg) => String(arg)).join(' '))
-      .find((line) => line.includes('Auth URL:'));
-    assert(authUrlLine !== undefined);
-    const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
-    const state = authUrl.searchParams.get('state');
-    assert(state);
+Deno.test("login command - uses configured endpoint when --api-url is omitted", async () =>
+  await withIsolatedConfig(async (configDir) => {
+    writeStoredConfig(configDir, { apiUrl: "https://test.takos.jp" });
+    const logSpy = stub(console, "log");
+    try {
+      const { program, calls } = registerTestLoginCommand(
+        "configured-endpoint-token",
+      );
 
-    const callbackHandler = loginMocks.getRequestHandler();
-    assert(callbackHandler !== undefined);
+      await program.parseAsync(["node", "takos", "login"]);
 
-    const req = createJsonCallbackRequest({
-      token: 'test-token',
-      state,
-    });
-    const res = {
-      writeHead: ((..._args: any[]) => undefined) as any,
-      end: ((..._args: any[]) => undefined) as any,
-    } as any;
+      assertEquals(calls.length, 1);
+      assertEquals(calls[0].apiUrl, "https://test.takos.jp");
+      const storedConfig = readStoredConfig(configDir);
+      assertEquals(storedConfig.token, "configured-endpoint-token");
+      assertEquals(storedConfig.apiUrl, "https://test.takos.jp");
+    } finally {
+      logSpy.restore();
+    }
+  }));
 
-    await callbackHandler!(req, res);
-    await assertEquals(await parsePromise, program);
+Deno.test("login command - fails closed and does not persist credentials on callback failure", async () =>
+  await withIsolatedConfig(async (configDir) => {
+    const logSpy = stub(console, "log");
+    try {
+      const { program } = registerTestLoginCommand(null, (options) => {
+        options.onFailure?.("missing_token");
+      });
 
-    assertSpyCallArgs(loginMocks.saveTokenMock, 0, ['test-token']);
-    assertSpyCallArgs(loginMocks.saveApiUrlMock, 0, ['https://api.takos.dev']);
-    assertSpyCallArgs(loginMocks.validateApiUrlMock, 0, ['https://api.takos.dev']);
+      await assertRejects(
+        () => program.parseAsync(["node", "takos", "login"]),
+        CliCommandExit,
+      );
 
-    logSpy.restore();
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('login command - uses configured endpoint when --api-url is omitted', async () => {
-  new FakeTime();
-    loginMocks.saveTokenMock;
-    loginMocks.saveApiUrlMock;
-    loginMocks.clearCredentialsMock;
-    loginMocks.isContainerModeMock;
-    loginMocks.isContainerModeMock = (() => false) as any;
-    loginMocks.validateApiUrlMock;
-    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
-    loginMocks.getConfigMock;
-    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
-    loginMocks.getLoginTimeoutMsMock;
-    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
-    loginMocks.openMock;
-    loginMocks.openMock = (async () => undefined) as any;
-    loginMocks.createServerMock;
-    loginMocks.resetRequestHandler();
-  try {
-  const logSpy = stub(console, 'log');
-    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://test.takos.jp' })) as any;
+      assertEquals(readStoredConfig(configDir), {});
+    } finally {
+      logSpy.restore();
+    }
+  }));
 
-    const program = new Command();
-    registerLoginCommand(program);
-    const parsePromise = program.parseAsync(['node', 'takos', 'login']);
+Deno.test("login command - rejects invalid API URL before starting callback server", async () =>
+  await withIsolatedConfig(async (configDir) => {
+    const logSpy = stub(console, "log");
+    try {
+      let callbackStarted = false;
+      const dependencies: LoginCommandDependencies = {
+        openAuthUrl: async () => {},
+        runOAuthCallbackServer: () => {
+          callbackStarted = true;
+          return Promise.resolve("should-not-run");
+        },
+      };
+      const program = new Command();
+      registerLoginCommand(program, dependencies);
 
-    await Promise.resolve();
+      await assertRejects(
+        () =>
+          program.parseAsync([
+            "node",
+            "takos",
+            "login",
+            "--api-url",
+            "ftp://evil.example.com",
+          ]),
+        CliCommandExit,
+      );
 
-    const authUrlLine = logSpy.calls
-      .map((args) => args.map((arg) => String(arg)).join(' '))
-      .find((line) => line.includes('Auth URL:'));
-    assert(authUrlLine !== undefined);
-    const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
-    assertEquals(authUrl.origin, 'https://test.takos.jp');
-    const state = authUrl.searchParams.get('state');
-    assert(state);
+      assertEquals(callbackStarted, false);
+      assertEquals(readStoredConfig(configDir), {});
+    } finally {
+      logSpy.restore();
+    }
+  }));
 
-    const callbackHandler = loginMocks.getRequestHandler();
-    assert(callbackHandler !== undefined);
+Deno.test("login command - returns without callback server in container mode", async () =>
+  await withIsolatedConfig(async (configDir) => {
+    Deno.env.set("TAKOS_TOKEN", "container-token");
+    const logSpy = stub(console, "log");
+    try {
+      let callbackStarted = false;
+      const dependencies: LoginCommandDependencies = {
+        openAuthUrl: async () => {},
+        runOAuthCallbackServer: () => {
+          callbackStarted = true;
+          return Promise.resolve("should-not-run");
+        },
+      };
+      const program = new Command();
+      registerLoginCommand(program, dependencies);
 
-    const req = createJsonCallbackRequest({
-      token: 'configured-endpoint-token',
-      state,
-    });
-    const res = {
-      writeHead: ((..._args: any[]) => undefined) as any,
-      end: ((..._args: any[]) => undefined) as any,
-    } as any;
+      await program.parseAsync(["node", "takos", "login"]);
 
-    await callbackHandler!(req, res);
-    await assertEquals(await parsePromise, program);
-    assertSpyCallArgs(loginMocks.saveTokenMock, 0, ['configured-endpoint-token']);
-    assertSpyCalls(loginMocks.saveApiUrlMock, 0);
-
-    logSpy.restore();
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('login command - fails closed for GET callback query token and does not persist credentials', async () => {
-  new FakeTime();
-    loginMocks.saveTokenMock;
-    loginMocks.saveApiUrlMock;
-    loginMocks.clearCredentialsMock;
-    loginMocks.isContainerModeMock;
-    loginMocks.isContainerModeMock = (() => false) as any;
-    loginMocks.validateApiUrlMock;
-    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
-    loginMocks.getConfigMock;
-    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
-    loginMocks.getLoginTimeoutMsMock;
-    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
-    loginMocks.openMock;
-    loginMocks.openMock = (async () => undefined) as any;
-    loginMocks.createServerMock;
-    loginMocks.resetRequestHandler();
-  try {
-  const logSpy = stub(console, 'log');
-
-    const program = new Command();
-    registerLoginCommand(program);
-    const parsePromise = program.parseAsync(['node', 'takos', 'login']);
-    const handledParsePromise = parsePromise.catch((error) => error);
-
-    await Promise.resolve();
-
-    const authUrlLine = logSpy.calls
-      .map((args) => args.map((arg) => String(arg)).join(' '))
-      .find((line) => line.includes('Auth URL:'));
-    assert(authUrlLine !== undefined);
-    const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
-    const state = authUrl.searchParams.get('state');
-    assert(state);
-
-    const callbackHandler = loginMocks.getRequestHandler();
-    assert(callbackHandler !== undefined);
-
-    const req = createGetCallbackRequest(`/callback?token=query-token&state=${state}`);
-    const res = {
-      writeHead: ((..._args: any[]) => undefined) as any,
-      end: ((..._args: any[]) => undefined) as any,
-    } as any;
-
-    await callbackHandler!(req, res);
-    await assert((await handledParsePromise) instanceof CliCommandExit);
-
-    assertSpyCallArgs(res.writeHead, 0, [400, { 'Content-Type': 'text/html' }]);
-    assertStringIncludes(String(res.end.calls[0]?.[0] ?? ''), 'Invalid callback payload');
-    assertSpyCalls(loginMocks.saveTokenMock, 0);
-
-    const authFailureLine = logSpy.calls
-      .map((args) => args.map((arg) => String(arg)).join(' '))
-      .find((line) => line.includes('Authentication failed:'));
-    assertStringIncludes(authFailureLine, 'Invalid callback payload');
-
-    logSpy.restore();
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('login command - sanitizes callback error before rendering and logging', async () => {
-  new FakeTime();
-    loginMocks.saveTokenMock;
-    loginMocks.saveApiUrlMock;
-    loginMocks.clearCredentialsMock;
-    loginMocks.isContainerModeMock;
-    loginMocks.isContainerModeMock = (() => false) as any;
-    loginMocks.validateApiUrlMock;
-    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
-    loginMocks.getConfigMock;
-    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
-    loginMocks.getLoginTimeoutMsMock;
-    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
-    loginMocks.openMock;
-    loginMocks.openMock = (async () => undefined) as any;
-    loginMocks.createServerMock;
-    loginMocks.resetRequestHandler();
-  try {
-  const logSpy = stub(console, 'log');
-
-    const program = new Command();
-    registerLoginCommand(program);
-    const parsePromise = program.parseAsync(['node', 'takos', 'login']);
-    const handledParsePromise = parsePromise.catch((error) => error);
-
-    await Promise.resolve();
-
-    const authUrlLine = logSpy.calls
-      .map((args) => args.map((arg) => String(arg)).join(' '))
-      .find((line) => line.includes('Auth URL:'));
-    assert(authUrlLine !== undefined);
-    const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
-    const state = authUrl.searchParams.get('state');
-    assert(state);
-
-    const callbackHandler = loginMocks.getRequestHandler();
-    assert(callbackHandler !== undefined);
-
-    const maliciousError = '<img src=x onerror=alert(1)>';
-    const req = createJsonCallbackRequest({
-      state,
-      error: maliciousError,
-    });
-    const res = {
-      writeHead: ((..._args: any[]) => undefined) as any,
-      end: ((..._args: any[]) => undefined) as any,
-    } as any;
-
-    await callbackHandler!(req, res);
-    await assert((await handledParsePromise) instanceof CliCommandExit);
-
-    const html = String(res.end.calls[0]?.[0] ?? '');
-    assertStringIncludes(html, '&lt;img src=x onerror=alert(1)&gt;');
-    assert(!(html).includes(maliciousError));
-
-    const authFailureLine = logSpy.calls
-      .map((args) => args.map((arg) => String(arg)).join(' '))
-      .find((line) => line.includes('Authentication failed:'));
-    assert(authFailureLine !== undefined);
-    assertStringIncludes(authFailureLine, '&lt;img src=x onerror=alert(1)&gt;');
-    assert(!(authFailureLine).includes(maliciousError));
-    assertSpyCalls(loginMocks.saveTokenMock, 0);
-
-    logSpy.restore();
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('login command - uses shared login timeout configuration', async () => {
-  new FakeTime();
-    loginMocks.saveTokenMock;
-    loginMocks.saveApiUrlMock;
-    loginMocks.clearCredentialsMock;
-    loginMocks.isContainerModeMock;
-    loginMocks.isContainerModeMock = (() => false) as any;
-    loginMocks.validateApiUrlMock;
-    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
-    loginMocks.getConfigMock;
-    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
-    loginMocks.getLoginTimeoutMsMock;
-    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
-    loginMocks.openMock;
-    loginMocks.openMock = (async () => undefined) as any;
-    loginMocks.createServerMock;
-    loginMocks.resetRequestHandler();
-  try {
-  loginMocks.getLoginTimeoutMsMock = (() => 123_456) as any;
-    const setTimeoutSpy = stub(globalThis, 'setTimeout');
-
-    const program = new Command();
-    registerLoginCommand(program);
-    const parsePromise = program.parseAsync(['node', 'takos', 'login']);
-    const handledParsePromise = parsePromise.catch((error) => error);
-
-    assertEquals(setTimeoutSpy.calls.some((call) => call[1] === 123_456), true);
-    await await fakeTime.tickAsync(123_456);
-    await assert((await handledParsePromise) instanceof CliCommandExit);
-    assertSpyCalls(loginMocks.saveTokenMock, 0);
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
+      assertEquals(callbackStarted, false);
+      assertEquals(readStoredConfig(configDir), {});
+    } finally {
+      logSpy.restore();
+    }
+  }));

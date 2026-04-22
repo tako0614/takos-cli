@@ -11,17 +11,17 @@ export function parseSseEventBlock(block: string): ParsedSseEvent | null {
   }
 
   const event: ParsedSseEvent = {
-    event: 'message',
+    event: "message",
     data: null,
   };
 
   const dataLines: string[] = [];
-  for (const line of block.split('\n')) {
-    if (!line || line.startsWith(':')) {
+  for (const line of block.split("\n")) {
+    if (!line || line.startsWith(":")) {
       continue;
     }
 
-    const separator = line.indexOf(':');
+    const separator = line.indexOf(":");
     if (separator === -1) {
       continue;
     }
@@ -29,17 +29,17 @@ export function parseSseEventBlock(block: string): ParsedSseEvent | null {
     const field = line.slice(0, separator);
     const value = line.slice(separator + 1).trimStart();
 
-    if (field === 'event') {
-      event.event = value || 'message';
+    if (field === "event") {
+      event.event = value || "message";
       continue;
     }
 
-    if (field === 'id') {
+    if (field === "id") {
       event.id = value;
       continue;
     }
 
-    if (field === 'retry') {
+    if (field === "retry") {
       const retryMs = Number(value);
       if (Number.isInteger(retryMs) && retryMs >= 0) {
         event.retry = retryMs;
@@ -47,13 +47,13 @@ export function parseSseEventBlock(block: string): ParsedSseEvent | null {
       continue;
     }
 
-    if (field === 'data') {
+    if (field === "data") {
       dataLines.push(value);
     }
   }
 
   if (dataLines.length > 0) {
-    event.data = dataLines.join('\n');
+    event.data = dataLines.join("\n");
   }
 
   return event;

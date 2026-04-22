@@ -1,1 +1,1 @@
-export const PRODUCTION_DOMAIN = 'takos.jp';
+export const PRODUCTION_DOMAIN = "takos.jp";

@@ -2,7 +2,7 @@
  * Type definitions for group deploy — deploying an entire app.yml manifest
  * as a unit directly to Cloudflare, bypassing the store install flow.
  */
-import type { AppManifest } from './group-deploy-manifest.ts';
+import type { AppManifest } from "./group-deploy-manifest.ts";
 
 // ── Options ──────────────────────────────────────────────────────────────────
 
@@ -27,13 +27,17 @@ export interface GroupDeployOptions {
 
 // ── Results ──────────────────────────────────────────────────────────────────
 
-export type ServiceDeployStatus = 'deployed' | 'failed' | 'skipped';
-export type ResourceProvisionStatus = 'provisioned' | 'exists' | 'failed' | 'skipped';
-export type BindingStatus = 'bound' | 'failed';
+export type ServiceDeployStatus = "deployed" | "failed" | "skipped";
+export type ResourceProvisionStatus =
+  | "provisioned"
+  | "exists"
+  | "failed"
+  | "skipped";
+export type BindingStatus = "bound" | "failed";
 
 export interface ServiceDeployResult {
   name: string;
-  type: 'worker' | 'container' | 'service' | 'http';
+  type: "worker" | "container" | "service" | "http";
   status: ServiceDeployStatus;
   scriptName?: string;
   url?: string;
@@ -123,6 +127,6 @@ export interface WranglerConfig {
   kv_namespaces?: WranglerKVBinding[];
   services?: WranglerServiceBinding[];
   queues_producers?: WranglerQueueProducer[];
-  vectorize_indexes?: WranglerVectorizeIndex[];
+  vectorize?: WranglerVectorizeIndex[];
   dispatch_namespace?: string;
 }

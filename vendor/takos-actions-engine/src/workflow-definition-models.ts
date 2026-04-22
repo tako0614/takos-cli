@@ -15,6 +15,7 @@ import type { WorkflowTrigger } from "./workflow-trigger-models.ts";
  */
 export interface Workflow {
   name?: string;
+  "run-name"?: string;
   on: WorkflowTrigger | string | string[];
   env?: Record<string, string>;
   jobs: Record<string, Job>;

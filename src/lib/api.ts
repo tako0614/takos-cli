@@ -2,11 +2,23 @@
  * API client for takos platform
  */
 
-import { getApiRequestTimeoutMs, getConfig } from './config.ts';
+import { getApiRequestTimeoutMs, getConfig } from "./config.ts";
 
-interface ApiError {
-  error: string;
+interface ApiErrorShape {
+  code?: string;
+  message?: string;
+  details?: unknown;
+}
+
+interface ApiErrorEnvelope {
+  error?: string | ApiErrorShape;
   details?: string;
+  message?: string;
+}
+
+function asApiErrorEnvelope(value: unknown): ApiErrorEnvelope | null {
+  if (!value || typeof value !== "object") return null;
+  return value as ApiErrorEnvelope;
 }
 
 type ApiResponse<T> =
@@ -16,7 +28,7 @@ type ApiResponse<T> =
 class ApiTimeoutError extends Error {
   constructor(timeoutMs: number) {
     super(`Request timed out after ${timeoutMs}ms`);
-    this.name = 'ApiTimeoutError';
+    this.name = "ApiTimeoutError";
   }
 }
 
@@ -34,12 +46,12 @@ export function createAuthHeaders(options: {
   }
 
   if (config.sessionId) {
-    headers['X-Takos-Session-Id'] = config.sessionId;
+    headers["X-Takos-Session-Id"] = config.sessionId;
   }
 
   const spaceId = options.spaceId ?? config.spaceId;
   if (spaceId) {
-    headers['X-Takos-Space-Id'] = spaceId;
+    headers["X-Takos-Space-Id"] = spaceId;
   }
 
   return headers;
@@ -48,7 +60,7 @@ export function createAuthHeaders(options: {
 async function fetchWithTimeout(
   input: string | URL,
   init: RequestInit = {},
-  timeoutMs: number = getApiRequestTimeoutMs()
+  timeoutMs: number = getApiRequestTimeoutMs(),
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -59,7 +71,7 @@ async function fetchWithTimeout(
       signal: controller.signal,
     });
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (err instanceof Error && err.name === "AbortError") {
       throw new ApiTimeoutError(timeoutMs);
     }
     throw err;
@@ -73,29 +85,54 @@ async function fetchWithTimeout(
  * Removes system paths, stack traces, and other sensitive information.
  */
 function sanitizeErrorMessage(error: unknown): string {
-  const DEFAULT_ERROR = 'An unexpected error occurred';
+  const DEFAULT_ERROR = "An unexpected error occurred";
 
   let message: string;
   if (error instanceof Error) {
     message = error.message
-      .replace(/at\s+[^\s]+\s+\([^)]+\)/g, '')
-      .replace(/\n\s*at\s+.*/g, '')
-      .replace(/Error:\s*/g, '');
-  } else if (typeof error === 'string') {
+      .replace(/at\s+[^\s]+\s+\([^)]+\)/g, "")
+      .replace(/\n\s*at\s+.*/g, "")
+      .replace(/Error:\s*/g, "");
+  } else if (typeof error === "string") {
     message = error;
   } else {
     return DEFAULT_ERROR;
   }
 
   let sanitized = message
-    .replace(/[A-Za-z]:\\[^\s:]+/g, '[path]')
-    .replace(/\/(?:home|Users|var|tmp|etc|usr)[^\s:]+/g, '[path]');
+    .replace(/[A-Za-z]:\\[^\s:]+/g, "[path]")
+    .replace(/\/(?:home|Users|var|tmp|etc|usr)[^\s:]+/g, "[path]");
 
   if (sanitized.length > 200) {
-    sanitized = sanitized.substring(0, 200) + '...';
+    sanitized = sanitized.substring(0, 200) + "...";
   }
 
   return sanitized.trim() || DEFAULT_ERROR;
+}
+
+function extractErrorMessage(
+  payload: ApiErrorEnvelope | null,
+  fallback: string,
+): string {
+  if (!payload) return fallback;
+  if (typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error.trim();
+  }
+  if (
+    payload.error &&
+    typeof payload.error === "object" &&
+    typeof payload.error.message === "string" &&
+    payload.error.message.trim()
+  ) {
+    return payload.error.message.trim();
+  }
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message.trim();
+  }
+  if (typeof payload.details === "string" && payload.details.trim()) {
+    return payload.details.trim();
+  }
+  return fallback;
 }
 
 // Make API request
@@ -105,13 +142,13 @@ export async function api<T>(
     method?: string;
     body?: FormData | Record<string, unknown>;
     headers?: Record<string, string>;
-    timeout?: number;  // Optional timeout in milliseconds (default: configured API timeout)
-  } = {}
+    timeout?: number; // Optional timeout in milliseconds (default: configured API timeout)
+  } = {},
 ): Promise<ApiResponse<T>> {
   const config = getConfig();
 
   if (!config.token && !config.sessionId) {
-    return { ok: false, error: 'Not authenticated. Run `takos login` first.' };
+    return { ok: false, error: "Not authenticated. Run `takos login` first." };
   }
 
   const url = `${config.apiUrl}${path}`;
@@ -122,7 +159,7 @@ export async function api<T>(
   if (options.body instanceof FormData) {
     body = options.body;
   } else if (options.body) {
-    headers['Content-Type'] = 'application/json';
+    headers["Content-Type"] = "application/json";
     body = JSON.stringify(options.body);
   }
 
@@ -130,14 +167,21 @@ export async function api<T>(
 
   try {
     const response = await fetchWithTimeout(url, {
-      method: options.method || 'GET',
+      method: options.method || "GET",
       headers,
       body,
     }, timeoutMs);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: response.statusText })) as ApiError;
-      return { ok: false, error: errorData.error || `HTTP ${response.status}` };
+      const errorData = asApiErrorEnvelope(
+        await response.json().catch(() =>
+          ({ error: response.statusText }) as ApiErrorEnvelope
+        ),
+      );
+      return {
+        ok: false,
+        error: extractErrorMessage(errorData, `HTTP ${response.status}`),
+      };
     }
 
     // 204/205 and empty 2xx bodies are valid for endpoints that return no content.
@@ -146,7 +190,7 @@ export async function api<T>(
     }
 
     const responseText = await response.text();
-    if (responseText.trim() === '') {
+    if (responseText.trim() === "") {
       return { ok: true, data: undefined as T };
     }
 
@@ -154,17 +198,17 @@ export async function api<T>(
     try {
       data = JSON.parse(responseText) as T;
     } catch {
-      return { ok: false, error: 'Invalid response from server' };
+      return { ok: false, error: "Invalid response from server" };
     }
     if (data === null || data === undefined) {
-      return { ok: false, error: 'Invalid response from server' };
+      return { ok: false, error: "Invalid response from server" };
     }
 
     return { ok: true, data };
   } catch (err) {
     // Handle timeout specifically
     if (err instanceof ApiTimeoutError) {
-      return { ok: false, error: 'Request timed out' };
+      return { ok: false, error: "Request timed out" };
     }
 
     // Sanitize error message to prevent information disclosure

@@ -1,28 +1,29 @@
 # takos-cli
 
-Japanese: [README.ja.md](README.ja.md)
+Takos CLI の standalone repository です。
 
-Standalone repository for the Takos CLI.
+`takos-cli` は Takos platform 向けの task-oriented CLI です。この repository
+には CLI 本体、テスト、そして `takos/` monorepo に依存せず build
+するために必要な最小限の vendored contract を含めています。
 
-`takos-cli` is the task-oriented command-line interface for the Takos platform. This repository contains the CLI source, tests, and the minimum vendored contracts needed to keep the CLI buildable outside the `takos/` monorepo.
+## この repo が持つもの
 
-## What This Repo Owns
-
-- authentication and endpoint selection for the Takos API
-- task-oriented API commands such as `workspace`, `repo`, `thread`, `run`, and `resource`
-- manifest-oriented commands such as `plan` and `apply`
-- local state inspection and refresh commands
-- CLI-specific Cloudflare deploy adapters and formatters
+- Takos API 向けの認証と endpoint 切り替え
+- `space`、`repo`、`thread`、`run`、`resource` などの task-oriented API command
+- `deploy` / `deploy --plan` を中心にした deploy manifest ベースの deploy
+  command
+- backend-neutral deploy client と API request formatting
 
 ## Repository Layout
 
-- `src/`: CLI implementation
-- `test/`: CLI tests
-- `vendor/takos-control/`: vendored manifest and deploy contracts required by the CLI
-- `vendor/takos-actions-engine/`: vendored workflow parser and validator used for manifest validation
-- `shims/`: runtime shims for packaging compatibility
+- `src/`: CLI 実装
+- `test/`: CLI テスト
+- `vendor/takos-control/`: CLI が必要とする manifest / deploy contract の vendor
+- `vendor/takos-actions-engine/`: manifest validation に使う workflow parser /
+  validator の vendor
+- `shims/`: packaging 互換用 shim
 
-## Requirements
+## 前提
 
 - Deno 2.x
 
@@ -34,7 +35,7 @@ deno task test
 deno task start -- --help
 ```
 
-Compile a local binary:
+ローカル binary を作る:
 
 ```bash
 cd takos-cli
@@ -43,15 +44,16 @@ deno task compile
 
 ## Installation
 
-Until a dedicated registry release flow is set up, use the compiled binary or run directly with Deno.
+専用の registry release flow を整えるまでは、compile した binary か Deno
+直接実行を使います。
 
 ```bash
 deno run --allow-all src/index.ts --help
 ```
 
-## Key Commands
+## 主なコマンド
 
-Authentication:
+認証:
 
 ```bash
 takos login
@@ -59,7 +61,7 @@ takos whoami
 takos logout
 ```
 
-Endpoint switching:
+endpoint 切り替え:
 
 ```bash
 takos endpoint use test
@@ -67,19 +69,25 @@ takos endpoint use prod
 takos endpoint show
 ```
 
-Manifest-oriented flow:
+deploy manifest ベースの deploy flow:
 
 ```bash
-takos plan
-takos apply --env staging
-takos apply --env production
+takos deploy --plan --group GROUP_NAME
+takos deploy --env staging --group GROUP_NAME
+takos deploy --env production --group GROUP_NAME
 ```
 
-## Standalone Notes
+`--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
+入っている既定 space を使います。
 
-- This repo vendors the minimum Takos contracts required to avoid a hard dependency on the `takos/` workspace.
-- The in-tree `takos/apps/cli` copy may remain temporarily for runtime image compatibility while the broader migration is completed.
-- If the manifest schema or deploy contract changes upstream, update the vendored contract files here in the same change window.
+## standalone 化メモ
+
+- この repo は `takos/` space への hard dependency を避けるため、必要最小限の
+  Takos contract を vendor しています。
+- broader migration が終わるまで、runtime image 互換のために `takos/apps/cli`
+  側の copy が一時的に残る場合があります。
+- upstream の manifest schema や deploy contract が変わったら、この repo の
+  vendor も同じ change window で更新してください。
 
 ## License
 

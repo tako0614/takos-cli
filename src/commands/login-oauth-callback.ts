@@ -1,20 +1,25 @@
-import { gray, green, red, yellow } from '@std/fmt/colors';
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { URL } from 'node:url';
-import { getLoginTimeoutMs } from '../lib/config.ts';
+import { gray, green, red, yellow } from "@std/fmt/colors";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import { URL } from "node:url";
+import { getLoginTimeoutMs } from "../lib/config.ts";
 import {
   type CallbackParams,
-  type OAuthCallbackFailureCode,
   OAUTH_CALLBACK_FAILURE_CODES,
+  type OAuthCallbackFailureCode,
   resolveCallbackParams,
   sanitizeAuthMessageForHtml,
   sanitizeAuthMessageForLog,
   validateCallbackPayload,
-} from './oauth-callback-validation.ts';
+} from "./oauth-callback-validation.ts";
 
-export type { OAuthCallbackFailureCode } from './oauth-callback-validation.ts';
+export type { OAuthCallbackFailureCode } from "./oauth-callback-validation.ts";
 
-const BIND_ADDRESS = '127.0.0.1';
+const BIND_ADDRESS = "127.0.0.1";
 
 const SUCCESS_CALLBACK_HTML = `
             <!DOCTYPE html>
@@ -74,31 +79,35 @@ function closeServerAsync(server: Server): Promise<void> {
 
 function sendErrorPage(res: ServerResponse, message: string): void {
   const sanitizedMessage = sanitizeAuthMessageForHtml(message);
-  res.writeHead(400, { 'Content-Type': 'text/html' });
-  res.end(`<html><body style="font-family:system-ui;text-align:center;padding-top:50px"><h1>Authentication failed</h1><p>${sanitizedMessage}</p></body></html>`);
+  res.writeHead(400, { "Content-Type": "text/html" });
+  res.end(
+    `<html><body style="font-family:system-ui;text-align:center;padding-top:50px"><h1>Authentication failed</h1><p>${sanitizedMessage}</p></body></html>`,
+  );
 }
 
 function sendSuccessPage(res: ServerResponse): void {
   res.writeHead(200, {
-    'Content-Type': 'text/html',
-    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
-    'Pragma': 'no-cache',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
+    "Content-Type": "text/html",
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Pragma": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
   });
   res.end(SUCCESS_CALLBACK_HTML);
 }
 
 function logAuthFailure(message: string): void {
-  console.log(red(`\nAuthentication failed: ${sanitizeAuthMessageForLog(message)}`));
+  console.log(
+    red(`\nAuthentication failed: ${sanitizeAuthMessageForLog(message)}`),
+  );
 }
 
 function logAuthSuccess(): void {
-  console.log(green('\nAuthentication successful!'));
+  console.log(green("\nAuthentication successful!"));
 }
 
 async function readRequestBody(req: IncomingMessage): Promise<string> {
-  let body = '';
+  let body = "";
   for await (const chunk of req) {
     body += chunk.toString();
     if (body.length > 16 * 1024) break;
@@ -106,9 +115,11 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
   return body;
 }
 
-async function parseCallbackParams(req: IncomingMessage): Promise<CallbackParams> {
-  const body = req.method === 'POST' ? await readRequestBody(req) : null;
-  const contentType = String(req.headers?.['content-type'] || '').toLowerCase();
+async function parseCallbackParams(
+  req: IncomingMessage,
+): Promise<CallbackParams> {
+  const body = req.method === "POST" ? await readRequestBody(req) : null;
+  const contentType = String(req.headers?.["content-type"] || "").toLowerCase();
 
   return resolveCallbackParams({
     method: req.method,
@@ -124,7 +135,11 @@ interface CallbackServerState {
   reject: (error: unknown) => void;
 }
 
-async function cleanupAndSettle(server: Server, state: CallbackServerState, { token, error }: CleanupResult): Promise<void> {
+async function cleanupAndSettle(
+  server: Server,
+  state: CallbackServerState,
+  { token, error }: CleanupResult,
+): Promise<void> {
   if (state.timeoutId) {
     clearTimeout(state.timeoutId);
     state.timeoutId = null;
@@ -174,11 +189,11 @@ async function handleCallbackRequest(
   oauthState: string,
   onFailure: ((code: OAuthCallbackFailureCode) => void) | undefined,
 ): Promise<void> {
-  const requestUrl = new URL(req.url || '/', 'http://localhost');
+  const requestUrl = new URL(req.url || "/", "http://localhost");
 
-  if (requestUrl.pathname !== '/callback') {
+  if (requestUrl.pathname !== "/callback") {
     res.writeHead(404);
-    res.end('Not found');
+    res.end("Not found");
     return;
   }
 
@@ -209,7 +224,7 @@ function setupLoginTimeout(
     void handleFailure(server, state, onFailure, {
       code: OAUTH_CALLBACK_FAILURE_CODES.TIMEOUT,
       log: () => {
-        console.log(red('\nAuthentication timed out'));
+        console.log(red("\nAuthentication timed out"));
       },
     });
   }, getLoginTimeoutMs());
@@ -224,22 +239,28 @@ function handleServerListening(
   onFailure: ((code: OAuthCallbackFailureCode) => void) | undefined,
 ): void {
   const address = server.address();
-  if (typeof address !== 'object' || !address) {
+  if (typeof address !== "object" || !address) {
     return;
   }
 
-  if (address.address !== BIND_ADDRESS && address.address !== '::1') {
+  if (address.address !== BIND_ADDRESS && address.address !== "::1") {
     void handleFailure(server, state, onFailure, {
       code: OAUTH_CALLBACK_FAILURE_CODES.UNEXPECTED_BIND_ADDRESS,
       log: () => {
-        console.log(red(`\nSecurity error: Server bound to unexpected address: ${address.address}`));
+        console.log(
+          red(
+            `\nSecurity error: Server bound to unexpected address: ${address.address}`,
+          ),
+        );
       },
     });
     return;
   }
 
   const callbackUrl = `http://${BIND_ADDRESS}:${address.port}/callback`;
-  const authUrl = `${apiUrl}/auth/cli?callback=${encodeURIComponent(callbackUrl)}&state=${encodeURIComponent(oauthState)}`;
+  const authUrl = `${apiUrl}/auth/cli?callback=${
+    encodeURIComponent(callbackUrl)
+  }&state=${encodeURIComponent(oauthState)}`;
 
   console.log(gray(`Callback URL: ${callbackUrl}`));
   console.log(gray(`Auth URL: ${authUrl}`));
@@ -250,7 +271,7 @@ function handleServerListening(
   });
 }
 
-export async function runOAuthCallbackServer({
+export function runOAuthCallbackServer({
   apiUrl,
   oauthState,
   openAuthUrl,
@@ -266,11 +287,18 @@ export async function runOAuthCallbackServer({
 
     const server = createServer();
 
-    server.on('request', (req, res) => {
-      void handleCallbackRequest(req, res, server, state, oauthState, onFailure);
+    server.on("request", (req, res) => {
+      void handleCallbackRequest(
+        req,
+        res,
+        server,
+        state,
+        oauthState,
+        onFailure,
+      );
     });
 
-    server.on('error', (err) => {
+    server.on("error", (err) => {
       void handleFailure(server, state, onFailure, {
         code: OAUTH_CALLBACK_FAILURE_CODES.SERVER_ERROR,
         log: () => {
@@ -280,7 +308,14 @@ export async function runOAuthCallbackServer({
     });
 
     server.listen(0, BIND_ADDRESS, () => {
-      handleServerListening(server, state, apiUrl, oauthState, openAuthUrl, onFailure);
+      handleServerListening(
+        server,
+        state,
+        apiUrl,
+        oauthState,
+        openAuthUrl,
+        onFailure,
+      );
     });
 
     state.timeoutId = setupLoginTimeout(server, state, onFailure);

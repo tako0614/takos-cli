@@ -18,7 +18,6 @@ import {
   validateWorkflow,
   type Workflow,
 } from "takos-actions-engine";
-import type { AppCompute } from "./app-manifest-types.ts";
 import {
   asOptionalInteger,
   filterWorkflowErrors,

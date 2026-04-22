@@ -57,6 +57,7 @@ const TOP_LEVEL_FIELDS = new Set([
   "resources",
   "routes",
   "publish",
+  "publications",
   "env",
   "overrides",
 ]);
@@ -104,6 +105,8 @@ function assertAllowedTopLevelFields(record: Record<string, unknown>): void {
 }
 
 const OVERRIDE_COMPUTE_FIELDS = new Set([
+  "kind",
+  "icon",
   "build",
   "image",
   "port",
@@ -143,15 +146,34 @@ const OVERRIDE_QUEUE_TRIGGER_FIELDS = new Set([
   "maxWaitTimeMs",
   "retryDelaySeconds",
 ]);
-const OVERRIDE_CONSUME_FIELDS = new Set(["publication", "env"]);
+const OVERRIDE_CONSUME_FIELDS = new Set([
+  "publication",
+  "as",
+  "request",
+  "inject",
+  "env",
+]);
+const OVERRIDE_CONSUME_INJECT_FIELDS = new Set(["env", "defaults"]);
 const OVERRIDE_PUBLISH_FIELDS = new Set([
   "name",
   "publisher",
   "spec",
+  "display",
+  "auth",
   "type",
-  "path",
+  "outputs",
   "title",
 ]);
+const OVERRIDE_OUTPUT_FIELDS = new Set(["kind", "routeRef", "route"]);
+const OVERRIDE_DISPLAY_FIELDS = new Set([
+  "title",
+  "description",
+  "icon",
+  "category",
+  "sortOrder",
+]);
+const OVERRIDE_AUTH_FIELDS = new Set(["bearer"]);
+const OVERRIDE_AUTH_BEARER_FIELDS = new Set(["secretRef"]);
 
 const OVERRIDE_RESOURCE_FIELDS = new Set([
   "type",
@@ -437,11 +459,49 @@ function parseOverrideConsumes(
       `${prefix}[${index}].publication`,
     );
     const result: Record<string, unknown> = { publication };
-    if (record.env != null) {
-      result.env = asStringMap(
-        record.env,
-        `${prefix}[${index}].env`,
+    const alias = asString(record.as, `${prefix}[${index}].as`);
+    if (alias) result.as = alias;
+    if (record.request != null) {
+      result.request = requireRecord(
+        record.request,
+        `${prefix}[${index}].request`,
       );
+    }
+    if (record.env != null && record.inject != null) {
+      throw new Error(`${prefix}[${index}] must not combine env and inject`);
+    }
+    if (record.inject != null) {
+      const injectRecord = requireRecord(
+        record.inject,
+        `${prefix}[${index}].inject`,
+      );
+      assertAllowedFields(
+        injectRecord,
+        `${prefix}[${index}].inject`,
+        OVERRIDE_CONSUME_INJECT_FIELDS,
+      );
+      const inject: Record<string, unknown> = {};
+      if (injectRecord.env != null) {
+        inject.env = asStringMap(
+          injectRecord.env,
+          `${prefix}[${index}].inject.env`,
+        );
+      }
+      if (injectRecord.defaults != null) {
+        inject.defaults = asOptionalBoolean(
+          injectRecord.defaults,
+          `${prefix}[${index}].inject.defaults`,
+        );
+      }
+      result.inject = inject;
+    }
+    if (record.env != null) {
+      result.inject = {
+        env: asStringMap(
+          record.env,
+          `${prefix}[${index}].env`,
+        ),
+      };
     }
     return result;
   });
@@ -477,6 +537,9 @@ function parseOverrideComputeEntry(
   assertAllowedFields(record, prefix, OVERRIDE_COMPUTE_FIELDS);
 
   const result: Record<string, unknown> = {};
+  const icon = asString(record.icon, `${prefix}.icon`);
+  if (icon) result.icon = icon;
+
   const build = parseOverrideBuild(`${prefix}.build`, record.build);
   if (build !== undefined) result.build = build;
 
@@ -574,20 +637,89 @@ function parseOverridePublishEntry(
   assertAllowedFields(record, prefix, OVERRIDE_PUBLISH_FIELDS);
 
   const result: Record<string, unknown> = {};
-  const name = asString(record.name, `${prefix}.name`);
-  if (name) result.name = name;
+  const name = asRequiredString(record.name, `${prefix}.name`);
+  result.name = name;
   const publisher = asString(record.publisher, `${prefix}.publisher`);
   if (publisher) result.publisher = publisher;
   const spec = record.spec;
   if (spec != null) result.spec = requireRecord(spec, `${prefix}.spec`);
+  if (record.display != null) {
+    const display = requireRecord(record.display, `${prefix}.display`);
+    assertAllowedFields(display, `${prefix}.display`, OVERRIDE_DISPLAY_FIELDS);
+    const parsedDisplay: Record<string, unknown> = {};
+    for (const key of ["title", "description", "icon", "category"]) {
+      const value = asString(display[key], `${prefix}.display.${key}`);
+      if (value) parsedDisplay[key] = value;
+    }
+    if (display.sortOrder != null) {
+      parsedDisplay.sortOrder = asOptionalInteger(
+        display.sortOrder,
+        `${prefix}.display.sortOrder`,
+      );
+    }
+    result.display = parsedDisplay;
+  }
+  if (record.auth != null) {
+    const auth = requireRecord(record.auth, `${prefix}.auth`);
+    assertAllowedFields(auth, `${prefix}.auth`, OVERRIDE_AUTH_FIELDS);
+    const parsedAuth: Record<string, unknown> = {};
+    if (auth.bearer != null) {
+      const bearer = requireRecord(auth.bearer, `${prefix}.auth.bearer`);
+      assertAllowedFields(
+        bearer,
+        `${prefix}.auth.bearer`,
+        OVERRIDE_AUTH_BEARER_FIELDS,
+      );
+      parsedAuth.bearer = {
+        secretRef: asRequiredString(
+          bearer.secretRef,
+          `${prefix}.auth.bearer.secretRef`,
+        ),
+      };
+    }
+    result.auth = parsedAuth;
+  }
   const type = asString(record.type, `${prefix}.type`);
   if (type) result.type = type;
-  const path = asString(record.path, `${prefix}.path`);
-  if (path) {
-    if (!path.startsWith("/")) {
-      throw new Error(`${prefix}.path must start with '/' (got: ${path})`);
+  if (record.outputs != null) {
+    const outputs = requireRecord(record.outputs, `${prefix}.outputs`);
+    const parsedOutputs: Record<string, unknown> = {};
+    for (const [outputName, outputRaw] of Object.entries(outputs)) {
+      const output = requireRecord(
+        outputRaw,
+        `${prefix}.outputs.${outputName}`,
+      );
+      assertAllowedFields(
+        output,
+        `${prefix}.outputs.${outputName}`,
+        OVERRIDE_OUTPUT_FIELDS,
+      );
+      const kind = asString(
+        output.kind,
+        `${prefix}.outputs.${outputName}.kind`,
+      );
+      const routeRef = asString(
+        output.routeRef,
+        `${prefix}.outputs.${outputName}.routeRef`,
+      );
+      const route = asString(
+        output.route,
+        `${prefix}.outputs.${outputName}.route`,
+      );
+      const parsedOutput: Record<string, unknown> = {};
+      if (kind) parsedOutput.kind = kind;
+      if (routeRef) parsedOutput.routeRef = routeRef;
+      if (route) {
+        if (!route.startsWith("/")) {
+          throw new Error(
+            `${prefix}.outputs.${outputName}.route must start with '/' (got: ${route})`,
+          );
+        }
+        parsedOutput.route = route;
+      }
+      parsedOutputs[outputName] = parsedOutput;
     }
-    result.path = path;
+    result.outputs = parsedOutputs;
   }
   const title = asString(record.title, `${prefix}.title`);
   if (title) result.title = title;
@@ -633,8 +765,20 @@ function parseOverrides(
     assertAllowedFields(
       envRecord,
       `overrides.${envName}`,
-      new Set(["compute", "routes", "publish", "env", "resources"]),
+      new Set([
+        "compute",
+        "routes",
+        "publish",
+        "publications",
+        "env",
+        "resources",
+      ]),
     );
+    if (envRecord.publish != null && envRecord.publications != null) {
+      throw new Error(
+        `overrides.${envName}.publish and overrides.${envName}.publications cannot be used together`,
+      );
+    }
     const entry: AppManifestOverride = {};
     if (envRecord.compute != null) {
       entry.compute = parseOverrideCompute(envRecord.compute) as Record<
@@ -652,9 +796,10 @@ function parseOverrides(
         { validateTargets: false },
       );
     }
-    if (envRecord.publish != null) {
+    const publishOverride = envRecord.publications ?? envRecord.publish;
+    if (publishOverride != null) {
       entry.publish = parseOverridePublish(
-        envRecord.publish,
+        publishOverride,
       ) as AppPublication[];
     }
     if (envRecord.env != null) {

@@ -1,74 +1,50 @@
-import type { AppPublication } from "../app-manifest-types.ts";
+import type {
+  AppPublication,
+  AppPublicationOutput,
+} from "../app-manifest-types.ts";
 import {
+  asOptionalInteger,
   asRecord,
   asRequiredString,
   asString,
   asStringArray,
 } from "../app-manifest-utils.ts";
 
-type PublicationNormalizeOptions = {
-  allowRelativeOAuthRedirectUris?: boolean;
-};
-
 const PUBLICATION_FIELDS = new Set([
   "name",
   "publisher",
   "type",
-  "path",
+  "outputs",
+  "display",
+  "auth",
   "title",
   "spec",
 ]);
 
-const TAKOS_PUBLICATION_TYPES = new Set([
-  "api-key",
-  "oauth-client",
-]);
+const STANDARD_PUBLICATION_TYPES: Record<string, string> = {
+  McpServer: "takos.mcp-server.v1",
+  FileHandler: "takos.file-handler.v1",
+  UiSurface: "takos.ui-surface.v1",
+};
 
-const FILE_HANDLER_PUBLICATION_TYPE = "FileHandler";
+const FILE_HANDLER_PUBLICATION_TYPE = "takos.file-handler.v1";
 
 const FILE_HANDLER_SPEC_FIELDS = new Set([
   "mimeTypes",
   "extensions",
 ]);
 
-const TAKOS_API_KEY_SPEC_FIELDS = new Set([
-  "scopes",
+const OUTPUT_FIELDS = new Set(["kind", "routeRef", "route"]);
+const DISPLAY_FIELDS = new Set([
+  "title",
+  "description",
+  "icon",
+  "category",
+  "sortOrder",
 ]);
-
-const TAKOS_OAUTH_SPEC_FIELDS = new Set([
-  "clientName",
-  "redirectUris",
-  "scopes",
-  "metadata",
-]);
-
-const TAKOS_OAUTH_METADATA_FIELDS = new Set([
-  "logoUri",
-  "tosUri",
-  "policyUri",
-]);
-
-const TAKOS_SCOPE_NAMES = new Set([
-  "openid",
-  "profile",
-  "email",
-  "spaces:read",
-  "spaces:write",
-  "files:read",
-  "files:write",
-  "memories:read",
-  "memories:write",
-  "threads:read",
-  "threads:write",
-  "runs:read",
-  "runs:write",
-  "agents:execute",
-  "repos:read",
-  "repos:write",
-  "mcp:invoke",
-  "events:subscribe",
-  "billing:meter",
-]);
+const AUTH_FIELDS = new Set(["bearer"]);
+const AUTH_BEARER_FIELDS = new Set(["secretRef"]);
+const OUTPUT_KINDS = new Set(["url", "string", "secret"]);
 
 function fileHandlerPathHasIdTemplate(path: string | undefined): boolean {
   return typeof path === "string" &&
@@ -100,13 +76,136 @@ function parseOptionalSpec(
   return value as Record<string, unknown>;
 }
 
+function canonicalPublicationType(type: string): string {
+  return STANDARD_PUBLICATION_TYPES[type] ?? type;
+}
+
+function parseOptionalDisplay(
+  prefix: string,
+  value: unknown,
+): AppPublication["display"] | undefined {
+  if (value == null) return undefined;
+  const record = asRecord(value);
+  assertAllowedFields(record, `${prefix}.display`, DISPLAY_FIELDS);
+  const title = asString(record.title, `${prefix}.display.title`);
+  const description = asString(
+    record.description,
+    `${prefix}.display.description`,
+  );
+  const icon = asString(record.icon, `${prefix}.display.icon`);
+  const category = asString(record.category, `${prefix}.display.category`);
+  const sortOrder = asOptionalInteger(
+    record.sortOrder,
+    `${prefix}.display.sortOrder`,
+  );
+  const display = {
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+    ...(icon ? { icon } : {}),
+    ...(category ? { category } : {}),
+    ...(sortOrder != null ? { sortOrder } : {}),
+  };
+  return Object.keys(display).length > 0 ? display : undefined;
+}
+
+function parseOptionalAuth(
+  prefix: string,
+  value: unknown,
+): AppPublication["auth"] | undefined {
+  if (value == null) return undefined;
+  const record = asRecord(value);
+  assertAllowedFields(record, `${prefix}.auth`, AUTH_FIELDS);
+  if (record.bearer == null) return undefined;
+  const bearer = asRecord(record.bearer);
+  assertAllowedFields(bearer, `${prefix}.auth.bearer`, AUTH_BEARER_FIELDS);
+  const secretRef = asRequiredString(
+    bearer.secretRef,
+    `${prefix}.auth.bearer.secretRef`,
+  );
+  return { bearer: { secretRef } };
+}
+
+function legacyAuthSecretRef(
+  spec: Record<string, unknown> | undefined,
+): string | undefined {
+  const value = spec?.authSecretRef;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function specWithoutLegacyAuth(
+  spec: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!spec || spec.authSecretRef == null) return spec;
+  const { authSecretRef: _authSecretRef, ...rest } = spec;
+  return Object.keys(rest).length > 0 ? rest : undefined;
+}
+
+function parsePublicationOutputs(
+  prefix: string,
+  raw: unknown,
+): Record<string, AppPublicationOutput> {
+  if (raw == null) {
+    throw new Error(`${prefix}.outputs is required`);
+  }
+  const record = asRecord(raw);
+  const outputs: Record<string, AppPublicationOutput> = {};
+  for (const [name, value] of Object.entries(record)) {
+    const outputPrefix = `${prefix}.outputs.${name}`;
+    const output = asRecord(value);
+    assertAllowedFields(output, outputPrefix, OUTPUT_FIELDS);
+    const kind = asString(output.kind, `${outputPrefix}.kind`);
+    if (kind && !OUTPUT_KINDS.has(kind)) {
+      throw new Error(`${outputPrefix}.kind must be url, string, or secret`);
+    }
+    const routeRef = asString(output.routeRef, `${outputPrefix}.routeRef`);
+    const route = asString(output.route, `${outputPrefix}.route`);
+    if (route && routeRef) {
+      throw new Error(`${outputPrefix} must not combine route and routeRef`);
+    }
+    if (!route && !routeRef) {
+      throw new Error(`${outputPrefix}.routeRef is required`);
+    }
+    if (route && !route.startsWith("/")) {
+      throw new Error(
+        `${outputPrefix}.route must start with '/' (got: ${route})`,
+      );
+    }
+    if (routeRef && !kind) {
+      throw new Error(`${outputPrefix}.kind is required when routeRef is used`);
+    }
+    if (kind && kind !== "url") {
+      throw new Error(`${outputPrefix}.kind must be url for route outputs`);
+    }
+    outputs[name] = {
+      ...(kind
+        ? { kind: kind as "url" | "string" | "secret" }
+        : { kind: "url" }),
+      ...(routeRef ? { routeRef } : {}),
+      ...(route ? { route } : {}),
+    };
+  }
+  if (Object.keys(outputs).length === 0) {
+    throw new Error(`${prefix}.outputs must declare at least one output`);
+  }
+  return outputs;
+}
+
+function firstRouteOutput(
+  outputs: Record<string, AppPublicationOutput>,
+): string | undefined {
+  return Object.values(outputs).find((output) => output.route)?.route;
+}
+
 function validateFileHandlerPublication(
   prefix: string,
-  path: string | undefined,
+  outputs: Record<string, AppPublicationOutput>,
   spec: Record<string, unknown> | undefined,
 ): void {
-  if (!fileHandlerPathHasIdTemplate(path)) {
-    throw new Error(`${prefix}.path must include :id for FileHandler`);
+  const path = firstRouteOutput(outputs);
+  if (path && !fileHandlerPathHasIdTemplate(path)) {
+    throw new Error(
+      `${prefix}.outputs must include a route with :id for FileHandler`,
+    );
   }
 
   const mimeTypes = asStringArray(spec?.mimeTypes, `${prefix}.spec.mimeTypes`);
@@ -125,256 +224,58 @@ function validateFileHandlerPublication(
   }
 }
 
-function validateTakosGrantSpec(
-  prefix: string,
-  type: string,
-  spec: Record<string, unknown> | undefined,
-): void {
-  if (!spec) return;
-  if (type === "api-key") {
-    assertAllowedFields(spec, `${prefix}.spec`, TAKOS_API_KEY_SPEC_FIELDS);
-    return;
-  }
-  if (type !== "oauth-client") return;
-  assertAllowedFields(spec, `${prefix}.spec`, TAKOS_OAUTH_SPEC_FIELDS);
-  const metadata = spec.metadata;
-  if (
-    metadata &&
-    typeof metadata === "object" &&
-    !Array.isArray(metadata)
-  ) {
-    assertAllowedFields(
-      metadata as Record<string, unknown>,
-      `${prefix}.spec.metadata`,
-      TAKOS_OAUTH_METADATA_FIELDS,
-    );
-  }
-}
-
-function normalizeStringList(values: unknown, field: string): string[] {
-  if (!Array.isArray(values)) {
-    throw new Error(`${field} must be an array`);
-  }
-  const normalized = [
-    ...new Set(
-      values.map((value) => String(value || "").trim()).filter(Boolean),
-    ),
-  ];
-  if (normalized.length === 0) {
-    throw new Error(`${field} must contain at least one value`);
-  }
-  return normalized;
-}
-
-function normalizeOptionalString(
-  value: unknown,
-  field: string,
-): string | undefined {
-  if (value == null) return undefined;
-  const normalized = String(value).trim();
-  if (!normalized) {
-    throw new Error(`${field} must not be empty`);
-  }
-  return normalized;
-}
-
-function normalizePublicationMetadata(
-  metadata: unknown,
-  field: string,
-): Record<string, string> | undefined {
-  if (metadata == null) return undefined;
-  if (typeof metadata !== "object" || Array.isArray(metadata)) {
-    throw new Error(`${field} must be an object`);
-  }
-  const record = metadata as Record<string, unknown>;
-  const normalized = {
-    ...(normalizeOptionalString(record.logoUri, `${field}.logoUri`)
-      ? {
-        logoUri: normalizeOptionalString(record.logoUri, `${field}.logoUri`)!,
-      }
-      : {}),
-    ...(normalizeOptionalString(record.tosUri, `${field}.tosUri`)
-      ? { tosUri: normalizeOptionalString(record.tosUri, `${field}.tosUri`)! }
-      : {}),
-    ...(normalizeOptionalString(record.policyUri, `${field}.policyUri`)
-      ? {
-        policyUri: normalizeOptionalString(
-          record.policyUri,
-          `${field}.policyUri`,
-        )!,
-      }
-      : {}),
-  };
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-}
-
-function normalizeOAuthRedirectUris(
-  values: unknown,
-  field: string,
-  options: PublicationNormalizeOptions = {},
-): string[] {
-  const normalized = normalizeStringList(values, field);
-  for (const uri of normalized) {
-    if (options.allowRelativeOAuthRedirectUris && uri.startsWith("/")) {
-      if (uri.startsWith("//")) {
-        throw new Error(`Invalid ${field} entry: ${uri}`);
-      }
-      const parsedRelative = new URL(uri, "https://takos.local");
-      if (parsedRelative.hash) {
-        throw new Error(
-          `Invalid ${field} entry: ${uri} must not include a fragment`,
-        );
-      }
-      continue;
-    }
-    let parsed: URL;
-    try {
-      parsed = new URL(uri);
-    } catch {
-      throw new Error(`Invalid ${field} entry: ${uri}`);
-    }
-    const isLocalhost = parsed.hostname === "localhost" ||
-      parsed.hostname === "127.0.0.1" ||
-      parsed.hostname === "[::1]" ||
-      parsed.hostname.endsWith(".localhost");
-    if (parsed.protocol !== "https:" && !isLocalhost) {
-      throw new Error(`Invalid ${field} entry: ${uri} must use HTTPS`);
-    }
-    if (parsed.hash) {
-      throw new Error(
-        `Invalid ${field} entry: ${uri} must not include a fragment`,
-      );
-    }
-  }
-  return normalized;
-}
-
-function normalizeGrantScopes(values: unknown, field: string): string[] {
-  const scopes = normalizeStringList(values, field);
-  const unknown = scopes.filter((scope) => !TAKOS_SCOPE_NAMES.has(scope));
-  if (unknown.length > 0) {
-    throw new Error(`Unknown Takos scopes: ${unknown.join(", ")}`);
-  }
-  return scopes;
-}
-
-function normalizeGrantPublication(
-  publication: AppPublication,
-  options: PublicationNormalizeOptions = {},
-): AppPublication {
-  const name = asRequiredString(publication.name, "publication.name");
-  const spec = parseOptionalSpec(`publication '${name}'`, publication.spec) ??
-    {};
-  if (publication.type === "api-key") {
-    return {
-      name,
-      publisher: "takos",
-      type: "api-key",
-      spec: {
-        scopes: normalizeGrantScopes(
-          spec.scopes,
-          `publication '${name}'.spec.scopes`,
-        ),
-      },
-    };
-  }
-  const scopes = normalizeGrantScopes(
-    spec.scopes,
-    `publication '${name}'.spec.scopes`,
-  );
-  return {
-    name,
-    publisher: "takos",
-    type: "oauth-client",
-    spec: {
-      ...(normalizeOptionalString(
-          spec.clientName,
-          `publication '${name}'.spec.clientName`,
-        )
-        ? {
-          clientName: normalizeOptionalString(
-            spec.clientName,
-            `publication '${name}'.spec.clientName`,
-          ),
-        }
-        : {}),
-      redirectUris: normalizeOAuthRedirectUris(
-        spec.redirectUris,
-        `publication '${name}'.spec.redirectUris`,
-        options,
-      ),
-      scopes,
-      ...(normalizePublicationMetadata(
-          spec.metadata,
-          `publication '${name}'.spec.metadata`,
-        )
-        ? {
-          metadata: normalizePublicationMetadata(
-            spec.metadata,
-            `publication '${name}'.spec.metadata`,
-          ),
-        }
-        : {}),
-    },
-  };
-}
-
 export function parsePublicationEntry(
   index: number,
   raw: unknown,
   prefixBase = "publish",
-  options: PublicationNormalizeOptions = {},
 ): AppPublication {
   const prefix = `${prefixBase}[${index}]`;
   const record = asRecord(raw);
   assertAllowedFields(record, prefix, PUBLICATION_FIELDS);
 
   const name = asRequiredString(record.name, `${prefix}.name`);
-  const publisher = asRequiredString(record.publisher, `${prefix}.publisher`);
-  const type = asRequiredString(record.type, `${prefix}.type`);
-  const path = asString(record.path, `${prefix}.path`);
-  const title = asString(record.title, `${prefix}.title`);
-  const spec = parseOptionalSpec(prefix, record.spec);
-
+  const type = canonicalPublicationType(
+    asRequiredString(record.type, `${prefix}.type`),
+  );
+  const publisher = asString(record.publisher, `${prefix}.publisher`);
   if (publisher === "takos") {
-    if (record.path != null) {
-      throw new Error(`${prefix}.path is not supported for publisher 'takos'`);
-    }
-    if (record.title != null) {
-      throw new Error(`${prefix}.title is not supported for publisher 'takos'`);
-    }
-    if (!TAKOS_PUBLICATION_TYPES.has(type)) {
-      throw new Error(
-        `${prefix}.type is unsupported for publisher 'takos': ${type}`,
-      );
-    }
-    validateTakosGrantSpec(prefix, type, spec);
-    return normalizeGrantPublication({
-      name,
-      publisher,
-      type,
-      ...(spec ? { spec } : {}),
-    }, options);
+    throw new Error(
+      `${prefix}.publisher 'takos' is not supported in app manifests; consume platform publications such as takos.api-key instead`,
+    );
   }
-
-  if (!path) {
-    throw new Error(`${prefix}.path is required for non-Takos publications`);
+  const outputs = parsePublicationOutputs(prefix, record.outputs);
+  const usesLegacyRoute = Object.values(outputs).some((output) => output.route);
+  if (usesLegacyRoute && !publisher) {
+    throw new Error(`${prefix}.publisher is required when outputs use route`);
   }
-  if (!path.startsWith("/")) {
-    throw new Error(`${prefix}.path must start with '/' (got: ${path})`);
+  const title = asString(record.title, `${prefix}.title`);
+  const display = parseOptionalDisplay(prefix, record.display);
+  if (title && display?.title) {
+    throw new Error(`${prefix} must not combine title and display.title`);
   }
+  const spec = parseOptionalSpec(prefix, record.spec);
+  const auth = parseOptionalAuth(prefix, record.auth);
+  const authSecretRef = legacyAuthSecretRef(spec);
+  if (auth && authSecretRef) {
+    throw new Error(`${prefix} must not combine auth and spec.authSecretRef`);
+  }
+  const normalizedAuth = auth ??
+    (authSecretRef ? { bearer: { secretRef: authSecretRef } } : undefined);
+  const normalizedDisplay = display ?? (title ? { title } : undefined);
+  const normalizedSpec = specWithoutLegacyAuth(spec);
 
   if (type === FILE_HANDLER_PUBLICATION_TYPE) {
-    validateFileHandlerPublication(prefix, path, spec);
+    validateFileHandlerPublication(prefix, outputs, normalizedSpec);
   }
 
   return {
     name,
-    publisher,
+    ...(publisher ? { publisher } : {}),
     type,
-    path,
-    ...(title ? { title } : {}),
-    ...(spec ? { spec } : {}),
+    outputs,
+    ...(normalizedDisplay ? { display: normalizedDisplay } : {}),
+    ...(normalizedAuth ? { auth: normalizedAuth } : {}),
+    ...(normalizedSpec ? { spec: normalizedSpec } : {}),
   };
 }
 
@@ -387,31 +288,36 @@ function validateUniqueness(entries: AppPublication[]): void {
       throw new Error(`publish[${index}] duplicate publication name: ${key}`);
     }
     seen.add(key);
-    if (entry.publisher === "takos" || !entry.path) return;
-    const routeKey = `${entry.publisher}\0${entry.path}`;
-    const previous = routePublisherPaths.get(routeKey);
-    if (previous != null) {
-      throw new Error(
-        `publish[${index}] duplicate route publication publisher/path '${entry.publisher} ${entry.path}' duplicates publish[${previous}]`,
-      );
+    for (const output of Object.values(entry.outputs ?? {})) {
+      if (!output.route || !entry.publisher) continue;
+      const routeKey = `${entry.publisher}\0${output.route}`;
+      const previous = routePublisherPaths.get(routeKey);
+      if (previous != null) {
+        throw new Error(
+          `publish[${index}] duplicate route publication publisher/route '${entry.publisher} ${output.route}' duplicates publish[${previous}]`,
+        );
+      }
+      routePublisherPaths.set(routeKey, index);
     }
-    routePublisherPaths.set(routeKey, index);
   });
 }
 
 export function parsePublish(
   topLevel: Record<string, unknown>,
 ): AppPublication[] {
-  if (topLevel.publish == null) {
+  if (topLevel.publish != null && topLevel.publications != null) {
+    throw new Error("publish and publications cannot be used together");
+  }
+  const raw = topLevel.publications ?? topLevel.publish;
+  const field = topLevel.publications != null ? "publications" : "publish";
+  if (raw == null) {
     return [];
   }
-  if (!Array.isArray(topLevel.publish)) {
-    throw new Error("publish must be an array");
+  if (!Array.isArray(raw)) {
+    throw new Error(`${field} must be an array`);
   }
-  const entries = topLevel.publish.map((entry, index) =>
-    parsePublicationEntry(index, entry, "publish", {
-      allowRelativeOAuthRedirectUris: true,
-    })
+  const entries = raw.map((entry, index) =>
+    parsePublicationEntry(index, entry, field)
   );
   validateUniqueness(entries);
   return entries;

@@ -59,7 +59,7 @@ export async function runApply(
 
 export function registerApplyCommand(program: Command): void {
   program
-    .command("apply")
+    .command("apply", { hidden: true })
     .description("Apply a resolved Deployment by id")
     .argument("<deploymentId>", "Resolved Deployment id (status=resolved)")
     .option("--space <id>", "Target space ID")

@@ -19,8 +19,6 @@ Takos CLI の standalone repository です。
 - `src/`: CLI 実装
 - `test/`: CLI テスト
 - `vendor/takos-control/`: CLI が必要とする manifest / deploy contract の vendor
-- `vendor/takos-actions-engine/`: manifest validation に使う workflow parser /
-  validator の vendor
 - `shims/`: packaging 互換用 shim
 
 ## 前提
@@ -100,6 +98,8 @@ Deployment record を作成して `takos apply` 待ちにします。
   に渡します。
 - upstream の manifest schema や deploy contract が変わったら、この repo の
   vendor も同じ change window で更新してください。
+- workflow parser / validator は independent domain package
+  `takos-actions-engine` から解決します。
 
 ## License
 

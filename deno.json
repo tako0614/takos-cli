@@ -10,7 +10,7 @@
     "ws": "npm:ws@^8.19.0",
     "yaml": "npm:yaml@^2.8.2",
     "zod": "npm:zod@^3.25.32",
-    "takos-actions-engine": "./vendor/takos-actions-engine/src/index.ts",
+    "takos-actions-engine": "npm:takos-actions-engine@^1.0.0",
     "takos-control/source/app-manifest": "./vendor/takos-control/src/application/services/source/app-manifest.ts",
     "takos-control/shared/constants": "./vendor/takos-control/src/shared/constants/index.ts",
     "takos-control/deployment/group-deploy-types": "./vendor/takos-control/src/application/services/deployment/group-deploy-types.ts"

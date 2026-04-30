@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import type { AppManifest as ParsedAppManifest } from "takos-control/source/app-manifest";
+import type { AppManifest as ParsedAppManifest } from "./app-manifest-contract/mod.ts";
 import {
   parseAndValidateWorkflowYaml,
   parseAppManifestYaml as parseCanonicalAppManifestYaml,
   validateDeployProducerJob,
-} from "takos-control/source/app-manifest";
+} from "./app-manifest-contract/mod.ts";
 
 export type AppManifest = ParsedAppManifest;
 

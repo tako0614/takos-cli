@@ -4,7 +4,7 @@ import process from "node:process";
 import {
   parseAndValidateWorkflowYaml,
   validateDeployProducerJob,
-} from "takos-control/source/app-manifest";
+} from "./app-manifest-contract/mod.ts";
 import type { Workflow } from "takos-actions-engine";
 import type { AppManifest } from "./app-manifest.ts";
 

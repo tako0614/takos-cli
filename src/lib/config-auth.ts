@@ -13,7 +13,6 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { PRODUCTION_DOMAIN } from "takos-control/shared/constants";
 import { logWarning } from "./cli-log.ts";
 import { isValidId, validateApiUrl } from "./config-validation.ts";
 import {
@@ -52,6 +51,8 @@ function writeConfStore(store: ConfStore): void {
   mkdirSync(configDir, { recursive: true });
   writeFileSync(getConfigFile(), JSON.stringify(store, null, 2));
 }
+
+const PRODUCTION_DOMAIN = "takos.jp";
 
 export const DEFAULT_API_URL = `https://${PRODUCTION_DOMAIN}`;
 

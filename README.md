@@ -4,7 +4,7 @@ Takos CLI の standalone repository です。
 
 `takos-cli` は Takos platform 向けの task-oriented CLI です。この repository
 には CLI 本体、テスト、そして `takos/` monorepo に依存せず build
-するために必要な最小限の vendored contract を含めています。
+するために必要な CLI-local app manifest contract を含めています。
 
 ## この repo が持つもの
 
@@ -18,7 +18,7 @@ Takos CLI の standalone repository です。
 
 - `src/`: CLI 実装
 - `test/`: CLI テスト
-- `vendor/takos-control/`: CLI が必要とする manifest / deploy contract の vendor
+- `src/lib/app-manifest-contract/`: CLI が deploy 時に読む app manifest contract
 - `shims/`: packaging 互換用 shim
 
 ## 前提
@@ -91,13 +91,13 @@ Deployment record を作成して `takos apply` 待ちにします。
 
 ## standalone 化メモ
 
-- この repo は `takos/` space への hard dependency を避けるため、必要最小限の
-  Takos contract を vendor しています。
+- この repo は `takos/` space への hard dependency を避けるため、CLI が読む app
+  manifest contract を `src/lib/app-manifest-contract/` に持ちます。
 - broader migration が終わるまで、runtime image 互換のために CLI source は
   ecosystem root の `takos-cli/` checkout から runtime image build context
   に渡します。
-- upstream の manifest schema や deploy contract が変わったら、この repo の
-  vendor も同じ change window で更新してください。
+- upstream の manifest schema が変わったら、この repo の CLI-local contract も
+  同じ change window で更新してください。
 - workflow parser / validator は independent domain package
   `takos-actions-engine` から解決します。
 

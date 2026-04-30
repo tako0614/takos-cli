@@ -1,10 +1,9 @@
 /**
- * Shared CLI-side type definitions for apply / group deployment snapshot results.
+ * Shared CLI-side type definitions for apply / deployment record results.
  *
- * These mirror the API response shapes returned by the backend
- * (`packages/control`) and are used by the CLI commands that POST to
- * `/group-deployment-snapshots`, `/groups/uninstall`, and `/groups/:id/rollback`
- * endpoints.
+ * These mirror the apply result shapes returned by the deploy backend and are
+ * used by CLI commands that POST to `/api/deploy/plans` and
+ * `/api/deploy/apply-runs`.
  *
  * Defining the types here keeps the CLI free of any dependency on the
  * retired local state/apply coordinator modules.

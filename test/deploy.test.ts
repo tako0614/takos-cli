@@ -9,26 +9,8 @@ import {
 } from "jsr:@std/assert";
 import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
 import { registerDeployCommand } from "../src/commands/deploy.ts";
+import { registerRollbackCommand } from "../src/commands/rollback.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
-
-const translationReport = {
-  supported: true,
-  requirements: [],
-  workloads: [],
-  routes: [],
-  unsupported: [],
-};
-
-const diff = {
-  hasChanges: true,
-  entries: [{ name: "gateway", category: "worker", action: "create" }],
-  summary: {
-    create: 1,
-    update: 0,
-    delete: 0,
-    unchanged: 0,
-  },
-};
 
 const localManifestYaml = `name: sample-app
 version: 1.0.0
@@ -81,44 +63,88 @@ jobs:
   }
 }
 
-const mutationResponse = {
-  group_deployment_snapshot: {
-    id: "snapshot-1",
-    group: { id: "group-1", name: "demo-group" },
-    source: {
-      kind: "git_ref",
-      repository_url: "https://github.com/acme/demo.git",
-      ref: "main",
-      ref_type: "branch",
-      commit_sha: "sha-1",
-      resolved_repo_id: null,
-    },
-    status: "applied",
-    manifest_version: "1.0.0",
-    hostnames: ["demo.example.com"],
-    rollback_of_group_deployment_snapshot_id: null,
-    created_at: "2026-04-01T00:00:00.000Z",
-    updated_at: "2026-04-01T00:00:00.000Z",
+const deploymentResponse = {
+  deployment_id: "dep-1",
+  status: "applied",
+  conditions: [
+    { type: "Resolved", status: "true" },
+    { type: "Applied", status: "true" },
+  ],
+  expansion_summary: {
+    components: 1,
+    routes: 1,
+    bindings: 0,
+    resources: 0,
+    diff: { create: 1, update: 0, delete: 0, unchanged: 0 },
   },
-  apply_result: {
-    applied: [
-      {
-        name: "gateway",
-        category: "worker",
-        action: "create",
-        status: "success",
-      },
-    ],
-    skipped: [],
-    diff,
-    translationReport,
+  hostnames: ["demo.example.com"],
+  deployment: {
+    id: "dep-1",
+    group_id: "demo-group",
+    space_id: "space-1",
+    status: "applied",
+    hostnames: ["demo.example.com"],
+    created_at: "2026-04-01T00:00:00.000Z",
+    applied_at: "2026-04-01T00:00:00.000Z",
   },
 };
 
-function createProgram(): Command {
+const previewResponse = {
+  deployment_id: "preview-1",
+  status: "preview",
+  expansion_summary: {
+    components: 1,
+    routes: 1,
+    bindings: 0,
+    resources: 0,
+    diff: { create: 1, update: 0, delete: 0, unchanged: 0 },
+  },
+};
+
+const resolvedResponse = {
+  deployment_id: "dep-resolved-1",
+  status: "resolved",
+  conditions: [{ type: "Resolved", status: "true" }],
+  expansion_summary: {
+    components: 1,
+    routes: 1,
+    bindings: 0,
+    resources: 0,
+    diff: { create: 1, update: 0, delete: 0, unchanged: 0 },
+  },
+};
+
+const rollbackResponse = {
+  deployment_id: "dep-2",
+  status: "applied",
+  conditions: [{ type: "Applied", status: "true" }],
+  group_head: {
+    group_id: "demo-group",
+    current_deployment_id: "dep-2",
+    previous_deployment_id: "dep-1",
+    generation: 2,
+    advanced_at: "2026-04-02T00:00:00.000Z",
+  },
+};
+
+const rollbackHeadResponse = {
+  deployment_id: "dep-2",
+  status: "applied",
+  conditions: [{ type: "Applied", status: "true" }],
+  head: rollbackResponse.group_head,
+};
+
+function createDeployProgram(): Command {
   const program = new Command();
   program.exitOverride();
   registerDeployCommand(program);
+  return program;
+}
+
+function createRollbackProgram(): Command {
+  const program = new Command();
+  program.exitOverride();
+  registerRollbackCommand(program);
   return program;
 }
 
@@ -139,16 +165,22 @@ function logOutput(calls: Array<{ args: unknown[] }>): string {
     .join("\n");
 }
 
+function readSpaceHeader(init: RequestInit | undefined): string | undefined {
+  const headers = init?.headers as Record<string, string> | undefined;
+  return headers?.["X-Takos-Space-Id"];
+}
+
 Deno.test("deploy command - creates a deployment from a repository URL", async () => {
   const fetchStub = stub(globalThis, "fetch", (input, init) => {
-    const request = init as { method?: string } | undefined;
+    const request = init as RequestInit | undefined;
     assertEquals(
       String(input),
-      "https://takos.jp/api/spaces/space-1/group-deployment-snapshots",
+      "https://takos.jp/api/public/v1/deployments",
     );
     assertEquals(request?.method, "POST");
+    assertEquals(readSpaceHeader(request), "space-1");
     return Promise.resolve(
-      new Response(JSON.stringify(mutationResponse), {
+      new Response(JSON.stringify(deploymentResponse), {
         status: 201,
         headers: { "Content-Type": "application/json" },
       }),
@@ -158,7 +190,7 @@ Deno.test("deploy command - creates a deployment from a repository URL", async (
   setAuthEnv();
 
   try {
-    const program = createProgram();
+    const program = createDeployProgram();
     await program.parseAsync([
       "node",
       "takos",
@@ -178,11 +210,12 @@ Deno.test("deploy command - creates a deployment from a repository URL", async (
     assertSpyCalls(fetchStub, 1);
     const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
     const body = JSON.parse(String(requestInit?.body));
-    assertEquals(body.group_name, "demo-group");
+    assertEquals(body.mode, "apply");
+    assertEquals(body.group, "demo-group");
     assertEquals(body.env, "production");
     assertEquals("provider" in body, false);
     assertEquals("backend" in body, false);
-    assertEquals(body.source.kind, "git_ref");
+    assertEquals(body.source.kind, "git");
     assertEquals(
       body.source.repository_url,
       "https://github.com/acme/demo.git",
@@ -191,11 +224,7 @@ Deno.test("deploy command - creates a deployment from a repository URL", async (
     assertEquals(body.source.ref_type, "branch");
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "URL:       https://demo.example.com",
-    );
-    assertStringIncludes(
-      logOutput(logSpy.calls),
-      "Hostnames: demo.example.com",
+      "ID:        dep-1",
     );
   } finally {
     fetchStub.restore();
@@ -235,7 +264,7 @@ Deno.test("deploy command - rejects invalid repository URLs before the API call"
   try {
     for (const { repositoryUrl, message } of cases) {
       const before = logSpy.calls.length;
-      const program = createProgram();
+      const program = createDeployProgram();
       await assertRejects(
         () =>
           program.parseAsync([
@@ -258,49 +287,15 @@ Deno.test("deploy command - rejects invalid repository URLs before the API call"
   }
 });
 
-Deno.test("deploy command - rejects invalid ref-type choices before the API call", async () => {
-  const fetchStub = stub(
-    globalThis,
-    "fetch",
-    () => Promise.reject(new Error("fetch should not be called")),
-  );
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
-
-  try {
-    const program = createProgram();
-    await assertRejects(
-      () =>
-        program.parseAsync([
-          "node",
-          "takos",
-          "deploy",
-          "https://github.com/acme/demo.git",
-          "--ref",
-          "main",
-          "--ref-type",
-          "banana",
-        ], { from: "node" }),
-      Error,
-    );
-
-    assertSpyCalls(fetchStub, 0);
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
-
-Deno.test("deploy command - omits group_name when --group is not provided", async () => {
+Deno.test("deploy command - omits group when --group is not provided", async () => {
   const fetchStub = stub(globalThis, "fetch", (input, init) => {
     assertEquals(
       String(input),
-      "https://takos.jp/api/spaces/space-1/group-deployment-snapshots",
+      "https://takos.jp/api/public/v1/deployments",
     );
     assertEquals((init as RequestInit | undefined)?.method, "POST");
     return Promise.resolve(
-      new Response(JSON.stringify(mutationResponse), {
+      new Response(JSON.stringify(deploymentResponse), {
         status: 201,
         headers: { "Content-Type": "application/json" },
       }),
@@ -310,7 +305,7 @@ Deno.test("deploy command - omits group_name when --group is not provided", asyn
   setAuthEnv();
 
   try {
-    const program = createProgram();
+    const program = createDeployProgram();
     await program.parseAsync([
       "node",
       "takos",
@@ -322,8 +317,8 @@ Deno.test("deploy command - omits group_name when --group is not provided", asyn
     assertSpyCalls(fetchStub, 1);
     const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
     const body = JSON.parse(String(requestInit?.body));
-    assertEquals("group_name" in body, false);
-    assertEquals(body.source.kind, "git_ref");
+    assertEquals("group" in body, false);
+    assertEquals(body.source.kind, "git");
   } finally {
     fetchStub.restore();
     logSpy.restore();
@@ -335,14 +330,14 @@ Deno.test(
   "deploy command - creates a deployment from a local manifest and forwards artifacts",
   async () => {
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
-      const request = init as { method?: string } | undefined;
+      const request = init as RequestInit | undefined;
       assertEquals(
         String(input),
-        "https://takos.jp/api/spaces/space-1/group-deployment-snapshots",
+        "https://takos.jp/api/public/v1/deployments",
       );
       assertEquals(request?.method, "POST");
       return Promise.resolve(
-        new Response(JSON.stringify(mutationResponse), {
+        new Response(JSON.stringify(deploymentResponse), {
           status: 201,
           headers: { "Content-Type": "application/json" },
         }),
@@ -353,7 +348,7 @@ Deno.test(
 
     try {
       await withTempProject(async () => {
-        const program = createProgram();
+        const program = createDeployProgram();
         await program.parseAsync([
           "node",
           "takos",
@@ -368,8 +363,9 @@ Deno.test(
           | RequestInit
           | undefined;
         const body = JSON.parse(String(requestInit?.body));
-        assertEquals(body.group_name, "demo-group");
-        assertEquals(body.source.kind, "manifest");
+        assertEquals(body.mode, "apply");
+        assertEquals(body.group, "demo-group");
+        assertEquals(body.source.kind, "inline");
         assertEquals(body.source.artifacts.length, 1);
         assertEquals(body.source.artifacts[0].compute, "gateway");
         assertEquals(
@@ -401,14 +397,14 @@ Deno.test(
   "deploy command - prints clean JSON output without progress banners",
   async () => {
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
-      const request = init as { method?: string } | undefined;
+      const request = init as RequestInit | undefined;
       assertEquals(
         String(input),
-        "https://takos.jp/api/spaces/space-1/group-deployment-snapshots",
+        "https://takos.jp/api/public/v1/deployments",
       );
       assertEquals(request?.method, "POST");
       return Promise.resolve(
-        new Response(JSON.stringify(mutationResponse), {
+        new Response(JSON.stringify(deploymentResponse), {
           status: 201,
           headers: { "Content-Type": "application/json" },
         }),
@@ -430,7 +426,7 @@ Deno.test(
 
     try {
       await withTempProject(async () => {
-        const program = createProgram();
+        const program = createDeployProgram();
         await program.parseAsync([
           "node",
           "takos",
@@ -446,8 +442,8 @@ Deno.test(
       assertSpyCalls(logSpy, 0);
       assertEquals(writes.length, 1);
       const parsed = JSON.parse(writes[0]);
-      assertEquals(parsed.group_deployment_snapshot.group.name, "demo-group");
-      assertEquals(parsed.apply_result.applied[0].name, "gateway");
+      assertEquals(parsed.deployment_id, "dep-1");
+      assertEquals(parsed.status, "applied");
     } finally {
       writeStub.restore();
       fetchStub.restore();
@@ -461,14 +457,14 @@ Deno.test(
   "deploy command - runs workflow steps before collecting local artifacts",
   async () => {
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
-      const request = init as { method?: string } | undefined;
+      const request = init as RequestInit | undefined;
       assertEquals(
         String(input),
-        "https://takos.jp/api/spaces/space-1/group-deployment-snapshots",
+        "https://takos.jp/api/public/v1/deployments",
       );
       assertEquals(request?.method, "POST");
       return Promise.resolve(
-        new Response(JSON.stringify(mutationResponse), {
+        new Response(JSON.stringify(deploymentResponse), {
           status: 201,
           headers: { "Content-Type": "application/json" },
         }),
@@ -496,7 +492,7 @@ jobs:
           "utf8",
         );
 
-        const program = createProgram();
+        const program = createDeployProgram();
         await program.parseAsync([
           "node",
           "takos",
@@ -511,7 +507,7 @@ jobs:
           | RequestInit
           | undefined;
         const body = JSON.parse(String(requestInit?.body));
-        assertEquals(body.source.kind, "manifest");
+        assertEquals(body.source.kind, "inline");
         assertEquals(body.source.artifacts.length, 1);
         assertEquals(
           body.source.artifacts[0].files[0].path,
@@ -558,7 +554,7 @@ jobs:
           "utf8",
         );
 
-        const program = createProgram();
+        const program = createDeployProgram();
         await assertRejects(
           () =>
             program.parseAsync([
@@ -581,7 +577,7 @@ jobs:
   },
 );
 
-Deno.test("deploy command - fails local plan before API call when worker artifact is missing", async () => {
+Deno.test("deploy command - fails local preview before API call when worker artifact is missing", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -593,7 +589,7 @@ Deno.test("deploy command - fails local plan before API call when worker artifac
   try {
     await withTempProject(async (projectDir) => {
       await fs.rm(path.join(projectDir, "dist", "gateway.mjs"));
-      const program = createProgram();
+      const program = createDeployProgram();
       await assertRejects(
         () =>
           program.parseAsync([
@@ -602,7 +598,7 @@ Deno.test("deploy command - fails local plan before API call when worker artifac
             "deploy",
             "--group",
             "demo-group",
-            "--plan",
+            "--preview",
           ], { from: "node" }),
         CliCommandExit,
       );
@@ -625,7 +621,7 @@ Deno.test("deploy command - rejects repository URLs combined with --manifest", a
   setAuthEnv();
 
   try {
-    const program = createProgram();
+    const program = createDeployProgram();
     await assertRejects(
       () =>
         program.parseAsync([
@@ -662,7 +658,7 @@ Deno.test("deploy command - rejects --ref for local manifest deploys", async () 
   setAuthEnv();
 
   try {
-    const program = createProgram();
+    const program = createDeployProgram();
     await assertRejects(
       () =>
         program.parseAsync([
@@ -698,7 +694,7 @@ Deno.test("deploy command - rejects --ref-type for local manifest deploys", asyn
   setAuthEnv();
 
   try {
-    const program = createProgram();
+    const program = createDeployProgram();
     await assertRejects(
       () =>
         program.parseAsync([
@@ -724,157 +720,116 @@ Deno.test("deploy command - rejects --ref-type for local manifest deploys", asyn
   }
 });
 
-Deno.test("deploy command - fails local plan before API call for ambiguous worker artifact directories", async () => {
-  const fetchStub = stub(
-    globalThis,
-    "fetch",
-    () => Promise.reject(new Error("fetch should not be called")),
-  );
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
+Deno.test(
+  "deploy command - fails local preview before API call for ambiguous worker artifact directories",
+  async () => {
+    const fetchStub = stub(
+      globalThis,
+      "fetch",
+      () => Promise.reject(new Error("fetch should not be called")),
+    );
+    const logSpy = stub(console, "log", () => {});
+    setAuthEnv();
 
-  try {
-    await withTempProject(async (projectDir) => {
-      await fs.writeFile(
-        path.join(projectDir, ".takos", "app.yml"),
-        localManifestYaml.replace(
-          "artifactPath: dist/gateway.mjs",
-          "artifactPath: dist",
-        ),
-        "utf8",
-      );
-      await fs.writeFile(
-        path.join(projectDir, "dist", "chunk.js"),
-        "export const chunk = true;",
-        "utf8",
-      );
+    try {
+      await withTempProject(async (projectDir) => {
+        await fs.writeFile(
+          path.join(projectDir, ".takos", "app.yml"),
+          localManifestYaml.replace(
+            "artifactPath: dist/gateway.mjs",
+            "artifactPath: dist",
+          ),
+          "utf8",
+        );
+        await fs.writeFile(
+          path.join(projectDir, "dist", "chunk.js"),
+          "export const chunk = true;",
+          "utf8",
+        );
 
-      const program = createProgram();
+        const program = createDeployProgram();
+        await assertRejects(
+          () =>
+            program.parseAsync([
+              "node",
+              "takos",
+              "deploy",
+              "--group",
+              "demo-group",
+              "--preview",
+            ], { from: "node" }),
+          CliCommandExit,
+        );
+      });
+      assertSpyCalls(fetchStub, 0);
+    } finally {
+      fetchStub.restore();
+      logSpy.restore();
+      clearAuthEnv();
+    }
+  },
+);
+
+Deno.test(
+  "deploy command - rejects --preview combined with --resolve-only",
+  async () => {
+    const fetchStub = stub(
+      globalThis,
+      "fetch",
+      () => Promise.reject(new Error("fetch should not be called")),
+    );
+    const logSpy = stub(console, "log", () => {});
+    setAuthEnv();
+
+    try {
+      const program = createDeployProgram();
       await assertRejects(
         () =>
           program.parseAsync([
             "node",
             "takos",
             "deploy",
-            "--group",
-            "demo-group",
-            "--plan",
+            "https://github.com/acme/demo.git",
+            "--preview",
+            "--resolve-only",
           ], { from: "node" }),
         CliCommandExit,
       );
-    });
-    assertSpyCalls(fetchStub, 0);
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
 
-Deno.test("deploy command - rejects --target without --plan before any API call", async () => {
-  const fetchStub = stub(
-    globalThis,
-    "fetch",
-    () => Promise.reject(new Error("fetch should not be called")),
-  );
-  const logSpy = stub(console, "log", () => {});
+      assertSpyCalls(fetchStub, 0);
+      assertStringIncludes(
+        logOutput(logSpy.calls),
+        "--preview and --resolve-only cannot be combined.",
+      );
+    } finally {
+      fetchStub.restore();
+      logSpy.restore();
+      clearAuthEnv();
+    }
+  },
+);
 
-  try {
-    const program = createProgram();
-    await assertRejects(
-      () =>
-        program.parseAsync([
-          "node",
-          "takos",
-          "deploy",
-          "--target",
-          "gateway",
-        ], { from: "node" }),
-      CliCommandExit,
-    );
-
-    assertSpyCalls(fetchStub, 0);
-    assertStringIncludes(
-      logOutput(logSpy.calls),
-      "--target is plan-only for immutable deployment snapshots",
-    );
-    assertStringIncludes(logOutput(logSpy.calls), "--plan");
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-  }
-});
-
-Deno.test("deploy status command - fetches the requested deployment", async () => {
-  const fetchStub = stub(globalThis, "fetch", (input) => {
-    assertEquals(
-      String(input),
-      "https://takos.jp/api/spaces/space-1/group-deployment-snapshots/snapshot-1",
-    );
-    return Promise.resolve(
-      new Response(
-        JSON.stringify({
-          group_deployment_snapshot: mutationResponse.group_deployment_snapshot,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
-    );
-  });
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
-
-  try {
-    const program = createProgram();
-    await program.parseAsync([
-      "node",
-      "takos",
-      "deploy",
-      "status",
-      "snapshot-1",
-    ], { from: "node" });
-
-    assertSpyCalls(fetchStub, 1);
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
-
-Deno.test("deploy rollback command - posts an empty rollback payload", async () => {
+Deno.test("deploy rollback command - posts to the group rollback endpoint", async () => {
   const fetchStub = stub(globalThis, "fetch", (input, init) => {
-    const request = init as { method?: string } | undefined;
+    const request = init as RequestInit | undefined;
     assertEquals(
       String(input),
-      "https://takos.jp/api/spaces/space-1/groups/by-name/demo-group/rollback",
+      "https://takos.jp/api/public/v1/groups/demo-group/rollback",
     );
     assertEquals(request?.method, "POST");
+    assertEquals(readSpaceHeader(request), "space-1");
     return Promise.resolve(
-      new Response(
-        JSON.stringify({
-          group: { id: "group-1", name: "demo-group" },
-          group_deployment_snapshot: {
-            ...mutationResponse.group_deployment_snapshot,
-            id: "snapshot-2",
-            rollback_of_group_deployment_snapshot_id: "snapshot-1",
-          },
-          apply_result: mutationResponse.apply_result,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
+      new Response(JSON.stringify(rollbackResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
   });
   const logSpy = stub(console, "log", () => {});
   setAuthEnv();
 
   try {
-    const program = createProgram();
+    const program = createRollbackProgram();
     await program.parseAsync([
       "node",
       "takos",
@@ -884,7 +839,12 @@ Deno.test("deploy rollback command - posts an empty rollback payload", async () 
 
     assertSpyCalls(fetchStub, 1);
     const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
-    assertEquals(String(requestInit?.body), "{}");
+    const body = JSON.parse(String(requestInit?.body));
+    assertEquals(body, {});
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "ID:        dep-2",
+    );
   } finally {
     fetchStub.restore();
     logSpy.restore();
@@ -892,8 +852,85 @@ Deno.test("deploy rollback command - posts an empty rollback payload", async () 
   }
 });
 
-Deno.test("deploy command - requires a repository URL", async () => {
-  const program = createProgram();
+Deno.test("deploy rollback command - forwards --target-id as target_id in body", async () => {
+  const fetchStub = stub(globalThis, "fetch", (input, init) => {
+    assertEquals(
+      String(input),
+      "https://takos.jp/api/public/v1/groups/demo-group/rollback",
+    );
+    assertEquals((init as RequestInit | undefined)?.method, "POST");
+    return Promise.resolve(
+      new Response(JSON.stringify(rollbackResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    const program = createRollbackProgram();
+    await program.parseAsync([
+      "node",
+      "takos",
+      "rollback",
+      "demo-group",
+      "--target-id",
+      "dep-1",
+    ], { from: "node" });
+
+    assertSpyCalls(fetchStub, 1);
+    const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
+    const body = JSON.parse(String(requestInit?.body));
+    assertEquals(body, { target_id: "dep-1" });
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
+Deno.test("deploy rollback command - accepts canonical head response shape", async () => {
+  const fetchStub = stub(globalThis, "fetch", (input, init) => {
+    assertEquals(
+      String(input),
+      "https://takos.jp/api/public/v1/groups/demo-group/rollback",
+    );
+    assertEquals((init as RequestInit | undefined)?.method, "POST");
+    return Promise.resolve(
+      new Response(JSON.stringify(rollbackHeadResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    const program = createRollbackProgram();
+    await program.parseAsync([
+      "node",
+      "takos",
+      "rollback",
+      "demo-group",
+    ], { from: "node" });
+
+    assertSpyCalls(fetchStub, 1);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "Current:   dep-2",
+    );
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
+Deno.test("deploy command - requires a repository URL or local manifest", async () => {
+  const program = createDeployProgram();
   const logSpy = stub(console, "log", () => {});
 
   try {
@@ -911,22 +948,18 @@ Deno.test("deploy command - requires a repository URL", async () => {
 });
 
 Deno.test(
-  "deploy command - plans repository URL deployments through group-deployment-snapshots plan",
+  "deploy command - previews a repository URL deployment via mode=preview",
   async () => {
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
-      const request = init as { method?: string } | undefined;
+      const request = init as RequestInit | undefined;
       assertEquals(
         String(input),
-        "https://takos.jp/api/spaces/space-1/group-deployment-snapshots/plan",
+        "https://takos.jp/api/public/v1/deployments",
       );
       assertEquals(request?.method, "POST");
       return Promise.resolve(
         new Response(
-          JSON.stringify({
-            group: { id: null, name: "demo-group", exists: false },
-            diff,
-            translationReport,
-          }),
+          JSON.stringify(previewResponse),
           {
             status: 200,
             headers: { "Content-Type": "application/json" },
@@ -938,7 +971,7 @@ Deno.test(
     setAuthEnv();
 
     try {
-      const program = createProgram();
+      const program = createDeployProgram();
       await program.parseAsync([
         "node",
         "takos",
@@ -952,10 +985,7 @@ Deno.test(
         "demo-group",
         "--env",
         "production",
-        "--target",
-        "gateway",
-        "gateway:/",
-        "--plan",
+        "--preview",
       ], { from: "node" });
 
       assertSpyCalls(fetchStub, 1);
@@ -963,18 +993,71 @@ Deno.test(
         | RequestInit
         | undefined;
       const body = JSON.parse(String(requestInit?.body));
-      assertEquals(body.group_name, "demo-group");
+      assertEquals(body.mode, "preview");
+      assertEquals(body.group, "demo-group");
       assertEquals(body.env, "production");
       assertEquals("provider" in body, false);
       assertEquals("backend" in body, false);
-      assertEquals(body.source.kind, "git_ref");
+      assertEquals(body.source.kind, "git");
       assertEquals(
         body.source.repository_url,
         "https://github.com/acme/demo.git",
       );
       assertEquals(body.source.ref, "main");
       assertEquals(body.source.ref_type, "branch");
-      assertEquals(body.target, ["gateway", "gateway:/"]);
+    } finally {
+      fetchStub.restore();
+      logSpy.restore();
+      clearAuthEnv();
+    }
+  },
+);
+
+Deno.test(
+  "deploy command - resolves without applying when --resolve-only is set",
+  async () => {
+    const fetchStub = stub(globalThis, "fetch", (input, init) => {
+      const request = init as RequestInit | undefined;
+      assertEquals(
+        String(input),
+        "https://takos.jp/api/public/v1/deployments",
+      );
+      assertEquals(request?.method, "POST");
+      return Promise.resolve(
+        new Response(JSON.stringify(resolvedResponse), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    });
+    const logSpy = stub(console, "log", () => {});
+    setAuthEnv();
+
+    try {
+      const program = createDeployProgram();
+      await program.parseAsync([
+        "node",
+        "takos",
+        "deploy",
+        "https://github.com/acme/demo.git",
+        "--ref",
+        "main",
+        "--ref-type",
+        "branch",
+        "--resolve-only",
+      ], { from: "node" });
+
+      assertSpyCalls(fetchStub, 1);
+      const requestInit = fetchStub.calls[0]?.args[1] as
+        | RequestInit
+        | undefined;
+      const body = JSON.parse(String(requestInit?.body));
+      assertEquals(body.mode, "resolve");
+      assertEquals(body.source.kind, "git");
+      assertStringIncludes(
+        logOutput(logSpy.calls),
+        "takos apply dep-resolved-1",
+      );
     } finally {
       fetchStub.restore();
       logSpy.restore();

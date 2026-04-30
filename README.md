@@ -72,10 +72,21 @@ takos endpoint show
 deploy manifest ベースの deploy flow:
 
 ```bash
-takos deploy --plan --group GROUP_NAME
+takos deploy --preview --group GROUP_NAME
+takos deploy --resolve-only --group GROUP_NAME
+takos apply DEPLOYMENT_RECORD_ID
 takos deploy --env staging --group GROUP_NAME
 takos deploy --env production --group GROUP_NAME
+takos deploy https://github.com/acme/my-app.git --ref main --group GROUP_NAME
+takos install owner/repo --version v1.0.0 --group GROUP_NAME
+takos rollback GROUP_NAME
 ```
+
+`takos deploy URL --ref ...` は developer / advanced な repository deploy です。
+`takos install owner/repo` は catalog item を repository source に解決して同じ
+deployment record / rollback pipeline に入れます。 `takos deploy --preview` は
+remote state を変更しない in-memory preview、`takos deploy --resolve-only` は
+Deployment record を作成して `takos apply` 待ちにします。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。
@@ -84,8 +95,9 @@ takos deploy --env production --group GROUP_NAME
 
 - この repo は `takos/` space への hard dependency を避けるため、必要最小限の
   Takos contract を vendor しています。
-- broader migration が終わるまで、runtime image 互換のために `takos/apps/cli`
-  側の copy が一時的に残る場合があります。
+- broader migration が終わるまで、runtime image 互換のために CLI source は
+  ecosystem root の `takos-cli/` checkout から runtime image build context
+  に渡します。
 - upstream の manifest schema や deploy contract が変わったら、この repo の
   vendor も同じ change window で更新してください。
 

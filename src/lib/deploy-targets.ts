@@ -8,7 +8,7 @@ export function ensurePlanOnlyTargetUsage(options: {
   if ((options.target?.length ?? 0) > 0 && !options.plan) {
     console.log(
       red(
-        "Error: --target is plan-only for immutable deployment snapshots. Use it with --plan, or remove --target.",
+        "Error: --target is plan-only for deployment records. Use it with --plan, or remove --target.",
       ),
     );
     cliExit(1);

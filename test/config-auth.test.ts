@@ -237,6 +237,20 @@ Deno.test("getConfig session file mode - uses session file api_url when valid", 
     assertEquals(config.apiUrl, "https://api.takos.jp");
   }));
 
+Deno.test("getConfig session file mode - TAKOS_API_URL overrides session file api_url", () =>
+  withIsolatedAuth((ctx) => {
+    const dir = ctx.makeSessionWorkspace(JSON.stringify({
+      session_id: VALID_SESSION_ID,
+      space_id: "space-test",
+      api_url: "https://session.example.com",
+    }));
+    process.chdir(dir);
+    Deno.env.set("TAKOS_API_URL", "https://override.example.com");
+
+    const config = getConfig();
+    assertEquals(config.apiUrl, "https://override.example.com");
+  }));
+
 Deno.test("getConfig external config mode - reads token from config file", () =>
   withIsolatedAuth((ctx) => {
     ctx.writeConfig({ token: "stored-token" });
@@ -261,6 +275,19 @@ Deno.test("getConfig external config mode - uses configured API URL", () =>
 
     const config = getConfig();
     assertEquals(config.apiUrl, "https://custom.example.com");
+  }));
+
+Deno.test("getConfig external config mode - TAKOS_API_URL overrides stored API URL with stored token", () =>
+  withIsolatedAuth((ctx) => {
+    ctx.writeConfig({
+      token: "stored-token",
+      apiUrl: "https://stored.example.com",
+    });
+    Deno.env.set("TAKOS_API_URL", "https://override.example.com");
+
+    const config = getConfig();
+    assertEquals(config.token, "stored-token");
+    assertEquals(config.apiUrl, "https://override.example.com");
   }));
 
 Deno.test("getConfig external config mode - falls back for invalid scheme", () =>

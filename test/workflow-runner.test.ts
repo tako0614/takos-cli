@@ -75,8 +75,6 @@ jobs:
 });
 
 Deno.test("workflow runner - rejects symlinked workflow files outside workspace", async () => {
-  if (Deno.build.os === "windows") return;
-
   await withTempProject(
     `name: placeholder
 on: push
@@ -106,7 +104,7 @@ jobs:
         );
         const projectWorkflow = path.join(projectDir, workflowPath);
         await fs.rm(projectWorkflow);
-        await fs.symlink(outsideWorkflow, projectWorkflow);
+        await fs.symlink(outsideWorkflow, projectWorkflow, "file");
 
         const error = await assertRejects(
           () =>
@@ -128,8 +126,6 @@ jobs:
 });
 
 Deno.test("workflow runner - rejects working directory symlinks outside workspace", async () => {
-  if (Deno.build.os === "windows") return;
-
   await withTempProject(
     `name: build-gateway
 on: push
@@ -147,7 +143,11 @@ jobs:
         path.join(os.tmpdir(), "takos-workdir-outside-"),
       );
       try {
-        await fs.symlink(outsideDir, path.join(projectDir, "build-link"));
+        await fs.symlink(
+          outsideDir,
+          path.join(projectDir, "build-link"),
+          "dir",
+        );
         const error = await assertRejects(
           () =>
             runWorkflowBuildsForManifest(manifestForBuild(), {

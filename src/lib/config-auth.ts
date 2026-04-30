@@ -69,17 +69,18 @@ function validateEnvSpaceId(): string | undefined {
 }
 
 /**
- * Validate API URL from env var and return it, or throw on invalid URL.
+ * Validate TAKOS_API_URL as an endpoint override independent of auth mode.
+ * Returns undefined when the override is not set.
  */
-function validateEnvApiUrl(): string {
-  const apiUrl = Deno.env.get("TAKOS_API_URL") || DEFAULT_API_URL;
-  if (Deno.env.get("TAKOS_API_URL")) {
-    logWarning(`Using custom API URL from environment: ${apiUrl}`);
-    const domainValidation = validateApiUrl(apiUrl);
-    if (!domainValidation.valid) {
-      logWarning(`SECURITY WARNING: ${domainValidation.error}`);
-      throw new Error(`Invalid TAKOS_API_URL: ${domainValidation.error}`);
-    }
+function validateEnvApiUrlOverride(): string | undefined {
+  const apiUrl = Deno.env.get("TAKOS_API_URL");
+  if (!apiUrl) return undefined;
+
+  logWarning(`Using custom API URL from environment: ${apiUrl}`);
+  const domainValidation = validateApiUrl(apiUrl);
+  if (!domainValidation.valid) {
+    logWarning(`SECURITY WARNING: ${domainValidation.error}`);
+    throw new Error(`Invalid TAKOS_API_URL: ${domainValidation.error}`);
   }
   return apiUrl;
 }
@@ -105,7 +106,7 @@ export function getConfig(): TakosConfig {
 
     const spaceId = validateEnvSpaceId();
     return {
-      apiUrl: validateEnvApiUrl(),
+      apiUrl: validateEnvApiUrlOverride() ?? DEFAULT_API_URL,
       sessionId,
       spaceId,
     };
@@ -117,7 +118,7 @@ export function getConfig(): TakosConfig {
 
     const spaceId = validateEnvSpaceId();
     return {
-      apiUrl: validateEnvApiUrl(),
+      apiUrl: validateEnvApiUrlOverride() ?? DEFAULT_API_URL,
       token: Deno.env.get("TAKOS_TOKEN"),
       spaceId,
     };
@@ -126,8 +127,10 @@ export function getConfig(): TakosConfig {
   // 2. Check for .takos-session file
   const sessionFile = findSessionFile();
   if (sessionFile) {
+    const apiUrl = validateEnvApiUrlOverride() ??
+      (sessionFile.api_url || DEFAULT_API_URL);
     return {
-      apiUrl: sessionFile.api_url || DEFAULT_API_URL,
+      apiUrl,
       sessionId: sessionFile.session_id,
       spaceId: sessionFile.space_id,
     };
@@ -135,9 +138,10 @@ export function getConfig(): TakosConfig {
 
   // 3. External mode - read from config file
   const store = readConfStore();
+  const envApiUrl = validateEnvApiUrlOverride();
   const configuredApiUrl = store.apiUrl;
-  let validatedApiUrl = DEFAULT_API_URL;
-  if (configuredApiUrl) {
+  let validatedApiUrl = envApiUrl ?? DEFAULT_API_URL;
+  if (!envApiUrl && configuredApiUrl) {
     const domainValidation = validateApiUrl(configuredApiUrl);
     if (!domainValidation.valid) {
       logWarning(

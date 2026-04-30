@@ -5,8 +5,12 @@
  * endpoint URL and authentication token, then provides typed helpers for
  * the group-state CRUD endpoints on the takos API.
  *
- * File-backed state is now explicit offline mode. Public callers
- * should use API helpers unless the user passed an offline option.
+ * File-backed state is now explicit offline mode.
+ *
+ * Legacy note: these state CRUD helpers still target the old `/api/groups*`
+ * state endpoints. Current `takos group` online commands use the space-scoped
+ * group API directly; keep these helpers only for compatibility callers until
+ * a space-scoped state CRUD contract exists.
  */
 
 import { api } from "../api.ts";

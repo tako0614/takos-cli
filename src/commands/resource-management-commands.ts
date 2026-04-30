@@ -24,9 +24,9 @@ export function registerCreateCommand(resourceCmd: Command) {
   resourceCmd
     .command("create <name>")
     .description("Create a new resource")
-    .option(
+    .requiredOption(
       "--type <type>",
-      `Resource type (${VALID_RESOURCE_TYPES.join(", ")})`,
+      `Required resource type (${VALID_RESOURCE_TYPES.join(", ")})`,
     )
     .option("--binding <binding>", "Suggested binding name")
     .option("--env <env>", "Target environment", "staging")

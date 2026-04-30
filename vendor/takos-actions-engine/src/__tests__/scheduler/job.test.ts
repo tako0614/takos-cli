@@ -760,9 +760,13 @@ Deno.test("JobScheduler fail-fast behavior - guards against concurrent run invoc
 
   const firstRunPromise = scheduler.run(createBaseContext());
 
-  await await assertRejects(async () => {
-    await scheduler.run(createBaseContext());
-  }, "JobScheduler is already running");
+  await assertRejects(
+    async () => {
+      await scheduler.run(createBaseContext());
+    },
+    Error,
+    "JobScheduler is already running",
+  );
 
   unblockFirstRun();
   const firstRunResults = await firstRunPromise;

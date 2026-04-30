@@ -105,7 +105,11 @@ export function resolveResourceType(input: {
   type?: string;
 }): ResourceCapability {
   if (!input.type) {
-    throw new Error(`Invalid resource type: ${input.type ?? ""}`);
+    throw new Error(
+      `Missing required option --type <type>. Valid resource types: ${
+        VALID_RESOURCE_TYPES.join(", ")
+      }`,
+    );
   }
 
   const normalized = RESOURCE_TYPE_ALIASES[input.type] ?? input.type;

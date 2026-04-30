@@ -1,12 +1,6 @@
 import process from "node:process";
-import { type Command, Option } from "commander";
-import { blue, bold, cyan, dim, green, red, yellow } from "@std/fmt/colors";
-import {
-  type ApplyExecutionResult,
-  exitIfApplyExecutionFailed,
-  printApplyExecutionResult,
-} from "../lib/apply/cli-output.ts";
-import { api } from "../lib/api.ts";
+import type { Command } from "commander";
+import { cyan, dim, red, yellow } from "@std/fmt/colors";
 import { confirmPrompt, printJson, resolveSpaceId } from "../lib/cli-utils.ts";
 import { CliCommandExit, cliExit } from "../lib/command-exit.ts";
 import {
@@ -15,62 +9,19 @@ import {
   resolveAppManifestPath,
 } from "../lib/app-manifest.ts";
 import {
-  buildGroupDeploymentSnapshotRequestBody,
-  requestGroupDeploymentSnapshotMutation,
-  requestGroupDeploymentSnapshotPlan,
-} from "../lib/group-deployment-snapshot-request.ts";
-import {
   collectArtifactsForManifest,
   resolveWorkspaceDir,
 } from "../lib/artifact-collector.ts";
-import type { DiffResult } from "../lib/apply/types.ts";
 import {
-  printTranslationReport,
-  type TranslationReport,
-} from "../lib/translation-report.ts";
-import { ensurePlanOnlyTargetUsage } from "../lib/deploy-targets.ts";
-
-type GroupDeploymentSnapshotRecord = {
-  id: string;
-  group: { id: string; name: string };
-  source: Record<string, unknown>;
-  snapshot?: {
-    state: "available" | "backfill_required" | "unsupported";
-    rollback_ready: boolean;
-    format: string | null;
-  };
-  status: string;
-  manifest_version: string | null;
-  hostnames: string[];
-  rollback_of_group_deployment_snapshot_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type GroupDeploymentSnapshotMutationResponse = {
-  group_deployment_snapshot: GroupDeploymentSnapshotRecord;
-  apply_result: ApplyExecutionResult;
-};
-
-type GroupDeploymentSnapshotListResponse = {
-  group_deployment_snapshots: GroupDeploymentSnapshotRecord[];
-};
-
-type GroupDeploymentSnapshotGetResponse = {
-  group_deployment_snapshot: GroupDeploymentSnapshotRecord;
-};
-
-type GroupRollbackResponse = {
-  group: { id: string; name: string };
-  group_deployment_snapshot: GroupDeploymentSnapshotRecord;
-  apply_result: ApplyExecutionResult;
-};
-
-type DeployPlanResponse = {
-  group: { id: string | null; name: string; exists: boolean };
-  diff: DiffResult;
-  translationReport: TranslationReport;
-};
+  createDeployment,
+  type CreateDeploymentRequest,
+  type DeploymentMode,
+  type DeploymentSource,
+} from "../api/deployments.ts";
+import {
+  formatExpansionSummary,
+  printDeploymentHeader,
+} from "../api/deployment-format.ts";
 
 export type DeployCommandOptions = {
   space?: string;
@@ -79,9 +30,9 @@ export type DeployCommandOptions = {
   group?: string;
   env?: string;
   manifest?: string;
-  plan?: boolean;
+  preview?: boolean;
+  resolveOnly?: boolean;
   autoApprove?: boolean;
-  target?: string[];
   json?: boolean;
 };
 
@@ -109,9 +60,7 @@ function validateRepositoryUrl(
   }
 
   if (parsed.username || parsed.password) {
-    console.log(
-      red("Invalid repository URL: credentials are not allowed."),
-    );
+    console.log(red("Invalid repository URL: credentials are not allowed."));
     cliExit(1);
   }
 
@@ -125,37 +74,12 @@ function validateRepositoryUrl(
   const pathSegments = parsed.pathname.split("/").filter(Boolean);
   if (pathSegments.length < 2) {
     console.log(
-      red(
-        "Invalid repository URL: expected an owner/repo-like path.",
-      ),
+      red("Invalid repository URL: expected an owner/repo-like path."),
     );
     cliExit(1);
   }
 
   return trimmed;
-}
-
-function printDeploymentSummary(
-  snapshot: GroupDeploymentSnapshotRecord,
-  options: { label?: string } = {},
-): void {
-  const label = options.label || "Group deployment snapshot";
-  console.log("");
-  console.log(bold(`${label}:`));
-  console.log(`  ID:        ${snapshot.id}`);
-  console.log(`  Group:     ${snapshot.group.name}`);
-  console.log(`  Status:    ${snapshot.status}`);
-  console.log(`  Version:   ${snapshot.manifest_version || "-"}`);
-  console.log(`  Created:   ${snapshot.created_at}`);
-  if (snapshot.hostnames.length > 0) {
-    console.log(`  URL:       https://${snapshot.hostnames[0]}`);
-    console.log(`  Hostnames: ${snapshot.hostnames.join(", ")}`);
-  }
-  if (snapshot.rollback_of_group_deployment_snapshot_id) {
-    console.log(
-      `  Rollback:  from ${snapshot.rollback_of_group_deployment_snapshot_id}`,
-    );
-  }
 }
 
 async function loadLocalManifest(
@@ -189,13 +113,37 @@ async function loadLocalManifest(
   return { manifest, manifestPath };
 }
 
+function pickMode(options: DeployCommandOptions): DeploymentMode {
+  if (options.preview && options.resolveOnly) {
+    console.log(
+      red("--preview and --resolve-only cannot be combined."),
+    );
+    cliExit(1);
+  }
+  if (options.preview) return "preview";
+  if (options.resolveOnly) return "resolve";
+  return "apply";
+}
+
+function describeMode(mode: DeploymentMode): string {
+  switch (mode) {
+    case "preview":
+      return "Preview (no record persisted)";
+    case "resolve":
+      return "Resolve (Deployment record, apply pending)";
+    case "apply":
+      return "Resolve + Apply";
+    default:
+      return mode;
+  }
+}
+
 export async function runDeploy(
   repositoryUrl: string | undefined,
   options: DeployCommandOptions,
 ): Promise<void> {
-  const targets = options.target ?? [];
-  ensurePlanOnlyTargetUsage(options);
   const env = options.env || "staging";
+  const mode = pickMode(options);
 
   const normalizedRepositoryUrl = validateRepositoryUrl(repositoryUrl);
   const usingRepositoryUrl = Boolean(normalizedRepositoryUrl);
@@ -206,27 +154,24 @@ export async function runDeploy(
     cliExit(1);
   }
 
-  if (usingRepositoryUrl) {
-    if (options.manifest) {
-      console.log(
-        red(
-          "--manifest cannot be used together with a repository URL.",
-        ),
-      );
-      cliExit(1);
-    }
+  if (usingRepositoryUrl && options.manifest) {
+    console.log(
+      red("--manifest cannot be used together with a repository URL."),
+    );
+    cliExit(1);
   }
 
   const spaceId = resolveSpaceId(options.space);
   const groupName = options.group?.trim();
 
-  let source: Record<string, unknown>;
+  let source: DeploymentSource;
   let manifest: AppManifest | undefined;
   let manifestPath: string | undefined;
+  let inlineManifest: unknown;
 
   if (usingRepositoryUrl) {
     source = {
-      kind: "git_ref",
+      kind: "git",
       repository_url: normalizedRepositoryUrl!,
       ...(options.ref ? { ref: options.ref } : {}),
       ...(options.refType ? { ref_type: options.refType } : {}),
@@ -235,18 +180,15 @@ export async function runDeploy(
     const loaded = await loadLocalManifest(options.manifest);
     manifest = loaded.manifest;
     manifestPath = loaded.manifestPath;
+    inlineManifest = manifest;
 
-    // Walk manifest.compute for entries with `build.fromWorkflow` and
-    // pack the local build outputs (file by file, base64) so the
-    // deploy request body carries the artifacts the backend would
-    // otherwise have to fetch from a workflow run.
     const workspaceDir = resolveWorkspaceDir(manifestPath);
     let collected;
     try {
       collected = await collectArtifactsForManifest(manifest, {
         workspaceDir,
         failOnMissing: true,
-        targets,
+        targets: [],
         quiet: Boolean(options.json),
       });
     } catch (error) {
@@ -260,101 +202,50 @@ export async function runDeploy(
     }
 
     source = {
-      kind: "manifest",
-      manifest,
+      kind: "inline",
       artifacts: collected.artifacts,
     };
   }
 
-  const baseBody = buildGroupDeploymentSnapshotRequestBody({
+  const requestBody: CreateDeploymentRequest = {
+    mode,
     env,
     source,
-    groupName,
-    target: targets,
-  });
+    ...(inlineManifest ? { manifest: inlineManifest } : {}),
+    ...(groupName ? { group: groupName } : {}),
+  };
 
-  // ── Plan / dry-run ────────────────────────────────────────────────
-  if (options.plan) {
-    const planResponse = await requestGroupDeploymentSnapshotPlan<
-      DeployPlanResponse
-    >(
-      spaceId,
-      baseBody,
-    );
-
-    if (!planResponse.ok) {
-      console.log(red(`Error: ${planResponse.error}`));
-      cliExit(1);
-    }
-
-    if (options.json) {
-      printJson(planResponse.data);
-      return;
-    }
-
-    console.log("");
-    console.log(blue(bold(`Plan: ${planResponse.data.group.name}`)));
-    console.log(`  Environment: ${env}`);
-    if (manifestPath) {
-      console.log(`  Manifest:    ${manifestPath}`);
-    }
-    if (usingRepositoryUrl) {
-      console.log(`  Source:      ${normalizedRepositoryUrl}`);
-    }
-    console.log(
-      `  Exists:      ${
-        planResponse.data.group.exists ? "yes" : "no (preview)"
-      }`,
-    );
-    if (targets.length > 0) {
-      console.log(`  Targets:     ${targets.join(", ")}`);
-    }
-    console.log("");
-
-    printTranslationReport(planResponse.data.translationReport);
-
-    const totalChanges = planResponse.data.diff.entries.filter((entry) =>
-      entry.action !== "unchanged"
-    ).length;
-    if (totalChanges === 0) {
-      console.log(green("No changes. Infrastructure is up-to-date."));
-    } else {
-      console.log(yellow(`Plan: ${totalChanges} change(s) detected.`));
-      console.log(dim("Re-run without --plan to apply these changes."));
-    }
-
-    if (
-      planResponse.data.translationReport &&
-      !planResponse.data.translationReport.supported
-    ) {
-      cliExit(1);
-    }
-    return;
-  }
-
-  // ── Confirmation prompt ───────────────────────────────────────────
-  if (!options.autoApprove && !options.json) {
+  // ── Confirmation prompt (apply mode only) ─────────────────────────
+  if (
+    mode === "apply" && !options.autoApprove && !options.json
+  ) {
     const label = usingRepositoryUrl
       ? `repository ${normalizedRepositoryUrl}`
       : `local deploy manifest ${manifestPath}`;
-    const promptMessage = `Deploy ${label} to ${env}?`;
-    if (!(await confirmPrompt(promptMessage))) {
+    if (!(await confirmPrompt(`Deploy ${label} to ${env}?`))) {
       console.log(dim("Deploy cancelled."));
       return;
     }
   }
 
-  // ── Apply ─────────────────────────────────────────────────────────
   if (!options.json) {
     console.log("");
-    console.log(cyan("Deploying..."));
+    console.log(cyan(`Mode: ${describeMode(mode)}`));
+    if (manifestPath) console.log(`  Manifest:    ${manifestPath}`);
+    if (usingRepositoryUrl) {
+      console.log(`  Repository:  ${normalizedRepositoryUrl}`);
+      if (options.ref) {
+        console.log(
+          `  Ref:         ${options.refType ?? "branch"} ${options.ref}`,
+        );
+      }
+    }
+    console.log(`  Env:         ${env}`);
+    if (groupName) console.log(`  Group:       ${groupName}`);
     console.log("");
   }
 
-  const response = await requestGroupDeploymentSnapshotMutation<
-    GroupDeploymentSnapshotMutationResponse
-  >(spaceId, baseBody);
-
+  const response = await createDeployment(spaceId, requestBody);
   if (!response.ok) {
     console.log(red(`Error: ${response.error}`));
     cliExit(1);
@@ -362,106 +253,43 @@ export async function runDeploy(
 
   if (options.json) {
     printJson(response.data);
+    if (response.data.status === "failed") cliExit(1);
     return;
   }
 
-  printApplyExecutionResult(
-    response.data.apply_result,
-    env,
-    response.data.group_deployment_snapshot.group.name,
-  );
-  printDeploymentSummary(response.data.group_deployment_snapshot);
-  exitIfApplyExecutionFailed(response.data.apply_result);
-}
-
-async function runDeployStatus(
-  groupDeploymentSnapshotId: string | undefined,
-  options: { space?: string; json?: boolean },
-): Promise<void> {
-  const spaceId = resolveSpaceId(options.space);
-  const path = groupDeploymentSnapshotId
-    ? `/api/spaces/${spaceId}/group-deployment-snapshots/${groupDeploymentSnapshotId}`
-    : `/api/spaces/${spaceId}/group-deployment-snapshots`;
-  const response = groupDeploymentSnapshotId
-    ? await api<GroupDeploymentSnapshotGetResponse>(path)
-    : await api<GroupDeploymentSnapshotListResponse>(path);
-
-  if (!response.ok) {
-    console.log(red(`Error: ${response.error}`));
-    cliExit(1);
-  }
-
-  if (options.json) {
-    printJson(response.data);
-    return;
-  }
-
-  if (groupDeploymentSnapshotId) {
-    printDeploymentSummary(
-      (response.data as GroupDeploymentSnapshotGetResponse)
-        .group_deployment_snapshot,
-    );
-    return;
-  }
-
-  const snapshots = (response.data as GroupDeploymentSnapshotListResponse)
-    .group_deployment_snapshots;
-  if (snapshots.length === 0) {
-    console.log(dim("No group deployment snapshots found."));
-    return;
-  }
-
-  for (const snapshot of snapshots) {
-    printDeploymentSummary(snapshot);
-  }
-}
-
-async function runRollback(
-  groupName: string,
-  options: { space?: string; json?: boolean },
-): Promise<void> {
-  const spaceId = resolveSpaceId(options.space);
-  const response = await api<GroupRollbackResponse>(
-    `/api/spaces/${spaceId}/groups/by-name/${
-      encodeURIComponent(groupName)
-    }/rollback`,
-    {
-      method: "POST",
-      body: {},
-      timeout: 120_000,
-    },
-  );
-
-  if (!response.ok) {
-    console.log(red(`Error: ${response.error}`));
-    cliExit(1);
-  }
-
-  if (options.json) {
-    printJson(response.data);
-    return;
-  }
-
-  printApplyExecutionResult(
-    response.data.apply_result,
-    "rollback",
-    response.data.group.name,
-    { title: "Rollback" },
-  );
-  printDeploymentSummary(response.data.group_deployment_snapshot, {
-    label: "Rollback group deployment snapshot",
+  printDeploymentHeader(response.data, {
+    title: mode === "preview"
+      ? "Preview"
+      : mode === "resolve"
+      ? "Resolved deployment"
+      : "Deployment",
   });
-  exitIfApplyExecutionFailed(response.data.apply_result);
+
+  if (mode === "resolve") {
+    console.log("");
+    console.log(
+      dim(
+        `Run \`takos apply ${response.data.deployment_id}\` to apply this deployment.`,
+      ),
+    );
+  }
+
+  if (mode === "preview") {
+    const summary = formatExpansionSummary(response.data.expansion_summary);
+    if (!summary) {
+      console.log(dim("(No expansion summary returned by server.)"));
+    }
+  }
+
+  if (response.data.status === "failed") cliExit(1);
 }
 
 export function registerDeployCommand(program: Command): void {
-  const deploy = program
+  program
     .command("deploy")
     .description(
-      "Deploy a local deploy manifest or a remote repository URL",
-    );
-
-  deploy
+      "Deploy a local manifest or repository (default: resolve + apply)",
+    )
     .argument(
       "[repositoryUrl]",
       "Optional canonical HTTPS git repository URL (defaults to local .takos/app.yml or .takos/app.yaml)",
@@ -477,21 +305,19 @@ export function registerDeployCommand(program: Command): void {
       "Local deploy manifest path (default: .takos/app.yml or .takos/app.yaml)",
     )
     .option("--ref <ref>", "Branch / tag / commit (repository URL only)")
-    .addOption(
-      new Option(
-        "--ref-type <type>",
-        "Source ref type: branch | tag | commit (repository URL only)",
-      ).choices(["branch", "tag", "commit"]),
+    .option(
+      "--ref-type <type>",
+      "Source ref type: branch | tag | commit (repository URL only)",
     )
     .option(
-      "--plan",
-      "Dry-run preview without mutating remote state",
+      "--preview",
+      "In-memory preview only; no Deployment record is persisted",
+    )
+    .option(
+      "--resolve-only",
+      "Create a resolved Deployment but do not apply it; use `takos apply <id>` later",
     )
     .option("--auto-approve", "Skip interactive confirmation prompt")
-    .option(
-      "--target <key...>",
-      "Plan-only diff entry filter (e.g. web, web:/)",
-    )
     .option("--json", "Machine-readable output")
     .action(
       async (
@@ -513,38 +339,4 @@ export function registerDeployCommand(program: Command): void {
         }
       },
     );
-
-  deploy
-    .command("status [groupDeploymentSnapshotId]")
-    .description("List group deployment snapshots or show one by snapshot ID")
-    .option("--space <id>", "Target space ID")
-    .option("--json", "Machine-readable output")
-    .action(runDeployStatus);
-
-  program
-    .command("rollback")
-    .description(
-      "Roll back a group to its previous successful group deployment snapshot",
-    )
-    .argument("<groupName>", "Group name to rollback")
-    .option("--space <id>", "Target space ID")
-    .option("--json", "Machine-readable output")
-    .action(async (
-      groupName: string,
-      options: { space?: string; json?: boolean },
-    ) => {
-      try {
-        await runRollback(groupName, options);
-      } catch (error) {
-        if (error instanceof CliCommandExit) throw error;
-        console.log(
-          red(
-            `Rollback failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          ),
-        );
-        cliExit(1);
-      }
-    });
 }

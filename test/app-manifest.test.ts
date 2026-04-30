@@ -65,22 +65,21 @@ env:
   API_MODE: production
 publish:
   - name: gateway-ui
-    publisher: gateway
     type: UiSurface
-    path: /
-    title: Gateway
+    outputs:
+      default:
+        kind: url
+        routeRef: gateway-root
+    display:
+      title: Gateway
   - name: gateway-mcp
-    publisher: gateway
     type: McpServer
-    path: /mcp
+    outputs:
+      default:
+        kind: url
+        routeRef: gateway-mcp
     spec:
       transport: streamable-http
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
 compute:
   gateway:
     build:
@@ -90,7 +89,7 @@ compute:
         artifact: gateway-dist
         artifactPath: dist/gateway.mjs
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
         env:
           endpoint: TAKOS_API_URL
     containers:
@@ -101,9 +100,11 @@ compute:
     image: ghcr.io/example/api@sha256:2222222222222222222222222222222222222222222222222222222222222222
     port: 8080
 routes:
-  - target: gateway
+  - id: gateway-root
+    target: gateway
     path: /
-  - target: gateway
+  - id: gateway-mcp
+    target: gateway
     path: /mcp
 overrides:
   staging:
@@ -129,30 +130,32 @@ Deno.test("deploy manifest - loads the flat public manifest surface", async () =
       "attached-container",
     );
     assertEquals(manifest.compute.gateway.consume, [{
-      publication: "takos-api",
-      env: { endpoint: "TAKOS_API_URL" },
+      publication: "takos.api-key",
+      inject: { env: { endpoint: "TAKOS_API_URL" } },
     }]);
     assertEquals(manifest.routes, [
-      { target: "gateway", path: "/" },
-      { target: "gateway", path: "/mcp" },
+      { id: "gateway-root", target: "gateway", path: "/" },
+      { id: "gateway-mcp", target: "gateway", path: "/mcp" },
     ]);
     assertEquals(manifest.publish.map((entry) => entry.name), [
       "gateway-ui",
       "gateway-mcp",
-      "takos-api",
     ]);
+    assertEquals(manifest.publish[0], {
+      name: "gateway-ui",
+      type: "takos.ui-surface.v1",
+      outputs: {
+        default: { kind: "url", routeRef: "gateway-root" },
+      },
+      display: { title: "Gateway" },
+    });
     assertEquals(manifest.publish[1], {
       name: "gateway-mcp",
-      publisher: "gateway",
-      type: "McpServer",
-      path: "/mcp",
+      type: "takos.mcp-server.v1",
+      outputs: {
+        default: { kind: "url", routeRef: "gateway-mcp" },
+      },
       spec: { transport: "streamable-http" },
-    });
-    assertEquals(manifest.publish[2], {
-      name: "takos-api",
-      publisher: "takos",
-      type: "api-key",
-      spec: { scopes: ["files:read"] },
     });
 
     assertEquals(manifest.name, "sample-app");
@@ -161,6 +164,58 @@ Deno.test("deploy manifest - loads the flat public manifest surface", async () =
     assertEquals(serialized.metadata, undefined);
     assertEquals(serialized.spec, undefined);
     assertEquals(serialized.apiVersion, undefined);
+  });
+});
+
+Deno.test("deploy manifest - rejects legacy publish path", async () => {
+  await withTempRepo({
+    ".takos/app.yml": `
+name: legacy-publish-path
+publish:
+  - name: gateway-ui
+    type: UiSurface
+    path: /
+compute:
+  gateway:
+    image: ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333
+    port: 8080
+`,
+  }, async (repoDir) => {
+    await assertRejects(
+      () => loadAppManifest(path.join(repoDir, ".takos/app.yml")),
+      Error,
+      "publish[0].path is not supported by the publish/consume contract",
+    );
+  });
+});
+
+Deno.test("deploy manifest - rejects platform-owned publisher", async () => {
+  await withTempRepo({
+    ".takos/app.yml": `
+name: platform-owned-publisher
+publish:
+  - name: takos-api
+    publisher: takos
+    type: api-key
+    outputs:
+      default:
+        kind: url
+        routeRef: api
+compute:
+  api:
+    image: ghcr.io/example/api@sha256:2222222222222222222222222222222222222222222222222222222222222222
+    port: 8080
+routes:
+  - id: api
+    target: api
+    path: /api
+`,
+  }, async (repoDir) => {
+    await assertRejects(
+      () => loadAppManifest(path.join(repoDir, ".takos/app.yml")),
+      Error,
+      "publish[0].publisher 'takos' is not supported in app manifests",
+    );
   });
 });
 

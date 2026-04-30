@@ -37,8 +37,20 @@ function logOutput(calls: Array<{ args: unknown[] }>): string {
     .join("\n");
 }
 
+const previewResponse = {
+  deployment_id: "preview-1",
+  status: "preview",
+  expansion_summary: {
+    components: 1,
+    routes: 1,
+    bindings: 0,
+    resources: 0,
+    diff: { create: 1, update: 0, delete: 0, unchanged: 0 },
+  },
+};
+
 Deno.test(
-  "install command - plans package deployment through group-deployment-snapshots plan",
+  "install command - previews a package install through the deployments endpoint",
   async () => {
     const calls: FetchCall[] = [];
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
@@ -67,30 +79,12 @@ Deno.test(
 
       assertEquals(
         String(input),
-        "https://takos.jp/api/spaces/space-1/group-deployment-snapshots/plan",
+        "https://takos.jp/api/public/v1/deployments",
       );
       assertEquals((init as RequestInit | undefined)?.method, "POST");
       return Promise.resolve(
         new Response(
-          JSON.stringify({
-            group: { id: null, name: "demo-group", exists: false },
-            diff: {
-              hasChanges: true,
-              entries: [{
-                name: "gateway",
-                category: "worker",
-                action: "create",
-              }],
-              summary: { create: 1, update: 0, delete: 0, unchanged: 0 },
-            },
-            translationReport: {
-              supported: true,
-              requirements: [],
-              workloads: [],
-              routes: [],
-              unsupported: [],
-            },
-          }),
+          JSON.stringify(previewResponse),
           {
             status: 200,
             headers: { "Content-Type": "application/json" },
@@ -113,19 +107,17 @@ Deno.test(
         "demo-group",
         "--env",
         "production",
-        "--target",
-        "gateway",
       ], { from: "node" });
 
       assertSpyCalls(fetchStub, 2);
       const planRequest = calls[1]?.init as RequestInit | undefined;
       const body = JSON.parse(String(planRequest?.body));
-      assertEquals(body.group_name, "demo-group");
+      assertEquals(body.mode, "preview");
+      assertEquals(body.group, "demo-group");
       assertEquals(body.env, "production");
       assertEquals("provider" in body, false);
       assertEquals("backend" in body, false);
-      assertEquals(body.target, ["gateway"]);
-      assertEquals(body.source.kind, "git_ref");
+      assertEquals(body.source.kind, "git");
       assertEquals(
         body.source.repository_url,
         "https://github.com/acme/demo.git",
@@ -140,42 +132,7 @@ Deno.test(
   },
 );
 
-Deno.test("install command - rejects --target without --plan before package lookup", async () => {
-  const fetchStub = stub(
-    globalThis,
-    "fetch",
-    () => Promise.reject(new Error("fetch should not be called")),
-  );
-  const logSpy = stub(console, "log", () => {});
-
-  try {
-    const program = createProgram();
-    await assertRejects(
-      () =>
-        program.parseAsync([
-          "node",
-          "takos",
-          "install",
-          "acme/demo",
-          "--target",
-          "gateway",
-        ], { from: "node" }),
-      CliCommandExit,
-    );
-
-    assertSpyCalls(fetchStub, 0);
-    assertStringIncludes(
-      logOutput(logSpy.calls),
-      "--target is plan-only for immutable deployment snapshots",
-    );
-    assertStringIncludes(logOutput(logSpy.calls), "--plan");
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-  }
-});
-
-Deno.test("install command - omits group_name when --group is not provided", async () => {
+Deno.test("install command - omits group when --group is not provided", async () => {
   const calls: FetchCall[] = [];
   const fetchStub = stub(globalThis, "fetch", (input, init) => {
     calls.push({ input: String(input), init });
@@ -198,21 +155,7 @@ Deno.test("install command - omits group_name when --group is not provided", asy
     }
     return Promise.resolve(
       new Response(
-        JSON.stringify({
-          group: { id: null, name: "demo-app", exists: false },
-          diff: {
-            hasChanges: false,
-            entries: [],
-            summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
-          },
-          translationReport: {
-            supported: true,
-            requirements: [],
-            workloads: [],
-            routes: [],
-            unsupported: [],
-          },
-        }),
+        JSON.stringify(previewResponse),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -236,8 +179,43 @@ Deno.test("install command - omits group_name when --group is not provided", asy
     assertSpyCalls(fetchStub, 2);
     const planRequest = calls[1]?.init as RequestInit | undefined;
     const body = JSON.parse(String(planRequest?.body));
-    assertEquals("group_name" in body, false);
-    assertEquals(body.source.kind, "git_ref");
+    assertEquals("group" in body, false);
+    assertEquals(body.source.kind, "git");
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
+Deno.test("install command - rejects unknown packageRef formats before any API call", async () => {
+  const fetchStub = stub(
+    globalThis,
+    "fetch",
+    () => Promise.reject(new Error("fetch should not be called")),
+  );
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    const program = createProgram();
+    await assertRejects(
+      () =>
+        program.parseAsync([
+          "node",
+          "takos",
+          "install",
+          "acme/demo/extra",
+          "--plan",
+        ], { from: "node" }),
+      CliCommandExit,
+    );
+
+    assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "Package must be in OWNER/REPO format",
+    );
   } finally {
     fetchStub.restore();
     logSpy.restore();

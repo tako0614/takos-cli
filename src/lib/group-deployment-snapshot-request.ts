@@ -1,54 +1,34 @@
-import { api } from "./api.ts";
+/**
+ * @deprecated v2 deployment-snapshot client.
+ *
+ * The legacy v2 deploy paths and the snapshot record were removed by the
+ * Core v3 unification. Deployment lifecycle now flows through the public v3
+ * deployments family rooted at `/api/public/v1/deployments`.
+ *
+ * This module is retained as a thin re-export of the v3 deployments client so
+ * that any remaining import sites fail closed at type-check time rather than
+ * silently calling deleted endpoints. New code MUST import directly from
+ * `../api/deployments.ts`.
+ */
 
-export type GroupDeploymentSnapshotSource = Record<string, unknown>;
+export {
+  applyDeployment,
+  approveDeployment,
+  createDeployment,
+  getDeployment,
+  getGroupHead,
+  listDeployments,
+  rollbackGroup,
+} from "../api/deployments.ts";
 
-export type GroupDeploymentSnapshotApiResponse<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-
-export type GroupDeploymentSnapshotRequestBody = {
-  env: string;
-  source: GroupDeploymentSnapshotSource;
-  group_name?: string;
-  target?: string[];
-};
-
-export function buildGroupDeploymentSnapshotRequestBody(options: {
-  env: string;
-  source: GroupDeploymentSnapshotSource;
-  groupName?: string;
-  target?: string[];
-}): GroupDeploymentSnapshotRequestBody {
-  return {
-    env: options.env,
-    source: options.source,
-    ...(options.groupName ? { group_name: options.groupName } : {}),
-    ...(options.target && options.target.length > 0
-      ? { target: options.target }
-      : {}),
-  };
-}
-
-export function requestGroupDeploymentSnapshotPlan<T>(
-  spaceId: string,
-  body: GroupDeploymentSnapshotRequestBody,
-  timeout = 120_000,
-): Promise<GroupDeploymentSnapshotApiResponse<T>> {
-  return api<T>(`/api/spaces/${spaceId}/group-deployment-snapshots/plan`, {
-    method: "POST",
-    body,
-    timeout,
-  });
-}
-
-export function requestGroupDeploymentSnapshotMutation<T>(
-  spaceId: string,
-  body: GroupDeploymentSnapshotRequestBody,
-  timeout = 120_000,
-): Promise<GroupDeploymentSnapshotApiResponse<T>> {
-  return api<T>(`/api/spaces/${spaceId}/group-deployment-snapshots`, {
-    method: "POST",
-    body,
-    timeout,
-  });
-}
+export type {
+  CreateDeploymentRequest,
+  CreateDeploymentResponse,
+  DeploymentCondition,
+  DeploymentExpansionSummary,
+  DeploymentMode,
+  DeploymentRecord,
+  DeploymentStatus,
+  GroupHeadRecord,
+  RollbackResponse,
+} from "../api/deployments.ts";

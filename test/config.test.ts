@@ -367,7 +367,7 @@ Deno.test("session file mode - uses session file api_url when schema and policy 
     }
   }
 });
-Deno.test("session file mode - uses session file api_url in session file mode regardless of TAKOS_API_URL", () => {
+Deno.test("session file mode - TAKOS_API_URL overrides session file api_url", () => {
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
@@ -392,11 +392,11 @@ Deno.test("session file mode - uses session file api_url in session file mode re
     }));
     process.chdir(dir);
 
-    Deno.env.set("TAKOS_API_URL", "https://api.takos.jp");
+    Deno.env.set("TAKOS_API_URL", "https://override.example.com");
 
     const config = getConfig();
     assertEquals(config, {
-      apiUrl: "https://api.takos.jp",
+      apiUrl: "https://override.example.com",
       sessionId: validSessionId,
       spaceId: "space-demo",
     });

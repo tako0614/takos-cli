@@ -166,7 +166,54 @@ Deno.test("group desired put - rejects raw JSON input", async () => {
     assertSpyCalls(fetchStub, 0);
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "Desired group deploy manifests must be YAML (.yml or .yaml), not JSON:",
+      "Desired group deploy manifests must be YAML (.yml or .yaml):",
+    );
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
+Deno.test("group desired put - rejects non-YAML manifest paths", async () => {
+  const fetchStub = stub(
+    globalThis,
+    "fetch",
+    () => Promise.reject(new Error("fetch should not be called")),
+  );
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    for (const fileName of ["desired.txt", "desired"]) {
+      await withTempDir(async (dir) => {
+        const manifestPath = path.join(dir, fileName);
+        await fs.writeFile(manifestPath, `name: sample-app\n`, "utf8");
+
+        const program = createProgram();
+        await assertRejects(
+          () =>
+            program.parseAsync([
+              "node",
+              "takos",
+              "group",
+              "desired",
+              "put",
+              "sample-app",
+              "--file",
+              manifestPath,
+              "--space",
+              "space-1",
+            ], { from: "node" }),
+          CliCommandExit,
+        );
+      });
+    }
+
+    assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "Desired group deploy manifests must be YAML (.yml or .yaml):",
     );
   } finally {
     fetchStub.restore();

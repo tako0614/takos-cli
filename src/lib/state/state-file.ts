@@ -19,6 +19,7 @@ import {
   readGroupStateFromApi,
   writeGroupStateToApi,
 } from "./api-client.ts";
+import { logWarning } from "../cli-log.ts";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -205,7 +206,14 @@ export async function deleteStateFile(
     return;
   }
   await deleteGroupStateFromApi(group);
-  await deleteStateFromFile(stateDir, group).catch(() => {});
+  try {
+    await deleteStateFromFile(stateDir, group);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logWarning(
+      `Deleted group '${group}' via API, but failed to remove local state cache: ${message}`,
+    );
+  }
 }
 
 /**

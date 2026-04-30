@@ -32,10 +32,11 @@ async function resolveGroupIdByName(
 }
 
 function validateDesiredManifestPath(filePath: string): void {
-  if (path.extname(filePath).toLowerCase() === ".json") {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension !== ".yml" && extension !== ".yaml") {
     console.log(
       red(
-        `Desired group deploy manifests must be YAML (.yml or .yaml), not JSON: ${filePath}`,
+        `Desired group deploy manifests must be YAML (.yml or .yaml): ${filePath}`,
       ),
     );
     cliExit(1);

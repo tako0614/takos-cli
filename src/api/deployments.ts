@@ -2,7 +2,7 @@
  * Deployments API client (v3 Core surface).
  *
  * Wraps the public Deployment-centric endpoints introduced by the
- * takos-paas Core simplification (Phase 1 § 17 spec). Every endpoint
+ * takosumi Core simplification (Phase 1 § 17 spec). Every endpoint
  * lives under `/api/public/v1/`.
  *
  *   POST /api/public/v1/deployments                        # create

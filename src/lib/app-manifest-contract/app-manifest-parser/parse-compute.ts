@@ -6,9 +6,8 @@
 //
 // Walks `compute.<name>` entries in the top-level manifest and
 // builds a `Record<string, AppCompute>`. The compute `kind`
-// (worker / service / attached-container) is auto-detected from
-// the presence of `build`, `image`, `dockerfile`, and `containers`
-// fields.
+// (worker / service / attached-container) is resolved from explicit `kind`
+// for workers or image-backed service / attached-container fields.
 //
 // Unified walker for all compute entries.
 // ============================================================
@@ -17,7 +16,6 @@ import type {
   AppCompute,
   AppConsume,
   AppTriggers,
-  BuildConfig,
   CloudflareComputeConfig,
   CloudflareContainerInstanceType,
   ComputeKind,
@@ -42,6 +40,7 @@ import {
   validateReadinessPath,
   validateServiceScaling,
 } from "../app-manifest-validation.ts";
+import { legacyBuildDisabledMessage } from "./legacy-build.ts";
 
 const COMPUTE_FIELDS = new Set([
   "kind",
@@ -63,13 +62,6 @@ const COMPUTE_FIELDS = new Set([
 ]);
 const INTERNAL_COMPUTE_FIELDS = COMPUTE_FIELDS;
 
-const BUILD_FIELDS = new Set(["fromWorkflow"]);
-const FROM_WORKFLOW_FIELDS = new Set([
-  "path",
-  "job",
-  "artifact",
-  "artifactPath",
-]);
 const VOLUME_FIELDS = new Set(["source", "target", "persistent"]);
 const HEALTH_CHECK_FIELDS = new Set([
   "path",
@@ -132,65 +124,6 @@ function assertAllowedFields(
       );
     }
   }
-}
-
-// ============================================================
-// Build configuration
-// ============================================================
-
-function parseBuildConfig(
-  prefix: string,
-  raw: unknown,
-): BuildConfig | undefined {
-  if (raw == null) return undefined;
-  const record = asRecord(raw);
-  assertAllowedFields(record, `${prefix}.build`, BUILD_FIELDS);
-  const fromWorkflow = asRecord(record.fromWorkflow);
-  assertAllowedFields(
-    fromWorkflow,
-    `${prefix}.build.fromWorkflow`,
-    FROM_WORKFLOW_FIELDS,
-  );
-  if (Object.keys(fromWorkflow).length === 0) {
-    throw new Error(`${prefix}.build.fromWorkflow is required`);
-  }
-  const workflowPath = normalizeRepoRelativePath(
-    asRequiredString(
-      fromWorkflow.path,
-      `${prefix}.build.fromWorkflow.path`,
-    ),
-    `${prefix}.build.fromWorkflow.path`,
-  );
-  if (!workflowPath.startsWith(".takos/workflows/")) {
-    throw new Error(
-      `${prefix}.build.fromWorkflow.path must be under .takos/workflows/`,
-    );
-  }
-  const artifactPath = asString(
-    fromWorkflow.artifactPath,
-    `${prefix}.build.fromWorkflow.artifactPath`,
-  );
-  return {
-    fromWorkflow: {
-      path: workflowPath,
-      job: asRequiredString(
-        fromWorkflow.job,
-        `${prefix}.build.fromWorkflow.job`,
-      ),
-      artifact: asRequiredString(
-        fromWorkflow.artifact,
-        `${prefix}.build.fromWorkflow.artifact`,
-      ),
-      ...(artifactPath
-        ? {
-          artifactPath: normalizeRepoRelativePath(
-            artifactPath,
-            `${prefix}.build.fromWorkflow.artifactPath`,
-          ),
-        }
-        : {}),
-    },
-  };
 }
 
 // ============================================================
@@ -725,6 +658,9 @@ function detectComputeKind(
     );
   }
   if (hasBuild) {
+    throw new Error(legacyBuildDisabledMessage(`${prefix}.build`));
+  }
+  if (explicitKind === "worker") {
     return assertKind("worker");
   }
   if (hasImage) {
@@ -736,7 +672,7 @@ function detectComputeKind(
     );
   }
   throw new Error(
-    `${prefix} must define 'build' (worker) or 'image' (service)`,
+    `${prefix} must define 'image' for service compute or explicit kind: worker`,
   );
 }
 
@@ -764,7 +700,6 @@ function parseComputeEntry(
     );
   }
 
-  const build = parseBuildConfig(prefix, record.build);
   const icon = asString(record.icon, `${prefix}.icon`);
   const image = parseComputeImage(record.image, `${prefix}.image`, {
     allowCloudflareDockerfile: !!cloudflare?.container,
@@ -854,7 +789,6 @@ function parseComputeEntry(
   return {
     kind,
     ...(icon ? { icon } : {}),
-    ...(build ? { build } : {}),
     ...(image ? { image } : {}),
     ...(port != null ? { port } : {}),
     ...(env ? { env } : {}),

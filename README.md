@@ -10,8 +10,8 @@ Takos CLI の standalone repository です。
 
 - Takos API 向けの認証と endpoint 切り替え
 - `space`、`repo`、`thread`、`run`、`resource` などの task-oriented API command
-- `deploy` / `deploy --plan` を中心にした deploy manifest ベースの deploy
-  command
+- digest-pinned image manifest / repository URL を Takos public deploy API
+  に送る deploy command
 - backend-neutral deploy client と API request formatting
 
 ## Repository Layout
@@ -80,11 +80,14 @@ takos install owner/repo --version v1.0.0 --group GROUP_NAME
 takos rollback GROUP_NAME
 ```
 
-`takos deploy URL --ref ...` は developer / advanced な repository deploy です。
-`takos install owner/repo` は catalog item を repository source に解決して同じ
-deployment record / rollback pipeline に入れます。 `takos deploy --preview` は
-remote state を変更しない in-memory preview、`takos deploy --resolve-only` は
-Deployment record を作成して `takos apply` 待ちにします。
+`takos deploy` の local manifest path は digest-pinned image manifest 向けです。
+worker bundle や workflow/build artifact の解決は `takosumi-git init` /
+`takosumi-git push` 側で行います。 `takos deploy URL --ref ...` は developer /
+advanced な repository deploy です。 `takos install owner/repo` は catalog item
+を repository source に解決して同じ deployment record / rollback pipeline
+に入れます。 `takos deploy --preview` は remote state を変更しない in-memory
+preview、`takos deploy --resolve-only` は Deployment record を作成して
+`takos apply` 待ちにします。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。
@@ -98,8 +101,6 @@ Deployment record を作成して `takos apply` 待ちにします。
   に渡します。
 - upstream の manifest schema が変わったら、この repo の CLI-local contract も
   同じ change window で更新してください。
-- workflow parser / validator は independent domain package
-  `takos-actions-engine` から解決します。
 
 ## License
 

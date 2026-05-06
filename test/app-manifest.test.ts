@@ -82,12 +82,7 @@ publish:
       transport: streamable-http
 compute:
   gateway:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build-gateway
-        artifact: gateway-dist
-        artifactPath: dist/gateway.mjs
+    kind: worker
     consume:
       - publication: takos.api-key
         env:
@@ -238,10 +233,10 @@ spec:
   });
 });
 
-Deno.test("deploy manifest - rejects build path traversal", async () => {
+Deno.test("deploy manifest - rejects legacy build metadata with migration guidance", async () => {
   await withTempRepo({
     ".takos/app.yml": `
-name: escaping-app
+name: legacy-build-app
 compute:
   gateway:
     build:
@@ -249,13 +244,13 @@ compute:
         path: .takos/workflows/build.yml
         job: build-gateway
         artifact: gateway-dist
-        artifactPath: ../dist/gateway.mjs
+        artifactPath: dist/gateway.mjs
 `,
   }, async (repoDir) => {
     await assertRejects(
       () => loadAppManifest(path.join(repoDir, ".takos/app.yml")),
       Error,
-      "compute.gateway.build.fromWorkflow.artifactPath must not contain path traversal",
+      "compute.gateway.build is no longer supported",
     );
   });
 });
@@ -318,141 +313,70 @@ compute:
   });
 });
 
-Deno.test("deploy manifest - rejects workers without fromWorkflow build source", async () => {
+Deno.test("deploy manifest - accepts explicit worker compute without build metadata", async () => {
   await withTempRepo({
     ".takos/app.yml": `
-name: broken-worker
+name: explicit-worker
 version: 1.0.0
 compute:
   gateway:
-    build: {}
+    kind: worker
 `,
   }, async (repoDir) => {
-    await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takos/app.yml")),
-      Error,
-      "compute.gateway.build.fromWorkflow is required",
+    const manifest = await loadAppManifest(
+      path.join(repoDir, ".takos/app.yml"),
+    );
+
+    assertEquals(
+      manifest.compute.gateway.kind,
+      "worker",
     );
   });
 });
 
-Deno.test("deploy manifest - validate allows missing artifactPath", async () => {
+Deno.test("deploy manifest - validate accepts explicit worker manifests", async () => {
   await withTempRepo({
     ".takos/app.yml": `
-name: missing-artifact-path
+name: explicit-worker
 version: 1.0.0
 compute:
   gateway:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build-gateway
-        artifact: gateway-dist
-`,
-    ".takos/workflows/build.yml": `
-name: build
-on:
-  workflow_dispatch:
-jobs:
-  build-gateway:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo ok
+    kind: worker
 `,
   }, async (repoDir) => {
     const result = await validateAppManifest(repoDir);
 
     assertEquals(
-      result.manifest.compute.gateway.build?.fromWorkflow.artifactPath,
-      undefined,
+      result.manifest.compute.gateway.kind,
+      "worker",
     );
   });
 });
 
-Deno.test("deploy manifest - rejects missing workflow files during validation", async () => {
+Deno.test("deploy manifest - rejects override build metadata with migration guidance", async () => {
   await withTempRepo({
     ".takos/app.yml": `
-name: missing-workflow
+name: legacy-override-build
 version: 1.0.0
 compute:
   gateway:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build-gateway
-        artifact: gateway-dist
-        artifactPath: dist/gateway.mjs
+    kind: worker
+overrides:
+  staging:
+    compute:
+      gateway:
+        build:
+          fromWorkflow:
+            path: .takos/workflows/build.yml
+            job: build-gateway
+            artifact: gateway-dist
+            artifactPath: dist/gateway.mjs
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => validateAppManifest(repoDir),
+      () => loadAppManifest(path.join(repoDir, ".takos/app.yml")),
       Error,
-      "Workflow file not found",
-    );
-  });
-});
-
-Deno.test("deploy manifest - rejects missing workflow jobs during validation", async () => {
-  await withTempRepo({
-    ".takos/app.yml": `
-name: missing-job
-version: 1.0.0
-compute:
-  gateway:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build-gateway
-        artifact: gateway-dist
-        artifactPath: dist/gateway.mjs
-`,
-    ".takos/workflows/build.yml": `
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo lint
-`,
-  }, async (repoDir) => {
-    await assertRejects(
-      () => validateAppManifest(repoDir),
-      Error,
-      "Workflow job not found",
-    );
-  });
-});
-
-Deno.test("deploy manifest - rejects deploy producer jobs that use needs", async () => {
-  await withTempRepo({
-    ".takos/app.yml": `
-name: invalid-job
-version: 1.0.0
-compute:
-  gateway:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build-gateway
-        artifact: gateway-dist
-        artifactPath: dist/gateway.mjs
-`,
-    ".takos/workflows/build.yml": `
-jobs:
-  setup:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo setup
-  build-gateway:
-    runs-on: ubuntu-latest
-    needs: [setup]
-    steps:
-      - run: echo build
-`,
-  }, async (repoDir) => {
-    await assertRejects(
-      () => validateAppManifest(repoDir),
-      Error,
-      "must not use needs",
+      "overrides.compute.gateway.build is no longer supported",
     );
   });
 });

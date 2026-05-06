@@ -7,17 +7,6 @@
 // (`docs/apps/manifest.md`).
 // ============================================================
 
-// --- Build configuration ---
-
-export type BuildConfig = {
-  fromWorkflow: {
-    path: string;
-    job: string;
-    artifact: string;
-    artifactPath?: string;
-  };
-};
-
 // --- Volume mount (compute-local) ---
 
 export type VolumeMount = {
@@ -167,7 +156,6 @@ export type ComputeKind = "worker" | "service" | "attached-container";
 export type AppCompute = {
   kind: ComputeKind; // auto-detected by parser
   icon?: string; // publisher/default launcher image icon metadata
-  build?: BuildConfig;
   image?: string;
   port?: number;
   env?: Record<string, string>;
@@ -263,13 +251,7 @@ export type AppManifest = {
 
 export type GroupDeploymentSnapshotBuildSource = {
   service_name: string;
-  workflow_path: string;
-  workflow_job: string;
-  workflow_artifact: string;
   artifact_path: string;
-  workflow_run_id?: string;
-  workflow_job_id?: string;
-  source_sha?: string;
 };
 
 export type BundleDoc = {
@@ -280,11 +262,5 @@ export type BundleDoc = {
 };
 
 export const BUILD_SOURCE_LABELS = {
-  workflowPath: "workflow_path",
-  workflowJob: "workflow_job",
-  workflowArtifact: "workflow_artifact",
   artifactPath: "artifact_path",
-  sourceRunId: "workflow_run_id",
-  sourceJobId: "workflow_job_id",
-  sourceSha: "source_sha",
 } as const;

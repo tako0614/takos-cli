@@ -37,7 +37,6 @@ import {
   asStringArray,
   asStringMap,
   normalizeRepoPath,
-  normalizeRepoRelativePath,
 } from "../app-manifest-utils.ts";
 import {
   validateDigestPinnedImageRef,
@@ -45,6 +44,7 @@ import {
   validateServiceScaling,
 } from "../app-manifest-validation.ts";
 import { validateSemver } from "./parse-common.ts";
+import { legacyBuildDisabledMessage } from "./legacy-build.ts";
 import { parseCompute } from "./parse-compute.ts";
 import { parsePublish } from "./parse-publish.ts";
 import { parseResources } from "./parse-resources.ts";
@@ -121,15 +121,6 @@ const OVERRIDE_COMPUTE_FIELDS = new Set([
   "dockerfile",
   "consume",
   "cloudflare",
-]);
-
-const OVERRIDE_BUILD_FIELDS = new Set(["fromWorkflow"]);
-
-const OVERRIDE_FROM_WORKFLOW_FIELDS = new Set([
-  "path",
-  "job",
-  "artifact",
-  "artifactPath",
 ]);
 
 const OVERRIDE_VOLUME_FIELDS = new Set(["source", "target", "persistent"]);
@@ -209,59 +200,6 @@ const OVERRIDE_CLOUDFLARE_CONTAINER_FIELDS = new Set([
   "migrationTag",
   "sqlite",
 ]);
-
-function parseOverrideBuild(
-  prefix: string,
-  raw: unknown,
-): Record<string, unknown> | undefined {
-  if (raw == null) return undefined;
-  const record = requireRecord(raw, prefix);
-  assertAllowedFields(record, prefix, OVERRIDE_BUILD_FIELDS);
-  const result: Record<string, unknown> = {};
-
-  if (record.fromWorkflow != null) {
-    const fromWorkflowRecord = requireRecord(
-      record.fromWorkflow,
-      `${prefix}.fromWorkflow`,
-    );
-    assertAllowedFields(
-      fromWorkflowRecord,
-      `${prefix}.fromWorkflow`,
-      OVERRIDE_FROM_WORKFLOW_FIELDS,
-    );
-    const fromWorkflow: Record<string, unknown> = {};
-    const workflowPath = asString(
-      fromWorkflowRecord.path,
-      `${prefix}.fromWorkflow.path`,
-    );
-    if (workflowPath) {
-      fromWorkflow.path = normalizeRepoRelativePath(
-        workflowPath,
-        `${prefix}.fromWorkflow.path`,
-      );
-    }
-    const job = asString(fromWorkflowRecord.job, `${prefix}.fromWorkflow.job`);
-    if (job) fromWorkflow.job = job;
-    const artifact = asString(
-      fromWorkflowRecord.artifact,
-      `${prefix}.fromWorkflow.artifact`,
-    );
-    if (artifact) fromWorkflow.artifact = artifact;
-    const artifactPath = asString(
-      fromWorkflowRecord.artifactPath,
-      `${prefix}.fromWorkflow.artifactPath`,
-    );
-    if (artifactPath) {
-      fromWorkflow.artifactPath = normalizeRepoRelativePath(
-        artifactPath,
-        `${prefix}.fromWorkflow.artifactPath`,
-      );
-    }
-    result.fromWorkflow = fromWorkflow;
-  }
-
-  return result;
-}
 
 function parseOverrideVolumes(
   prefix: string,
@@ -540,8 +478,9 @@ function parseOverrideComputeEntry(
   const icon = asString(record.icon, `${prefix}.icon`);
   if (icon) result.icon = icon;
 
-  const build = parseOverrideBuild(`${prefix}.build`, record.build);
-  if (build !== undefined) result.build = build;
+  if (record.build != null) {
+    throw new Error(legacyBuildDisabledMessage(`${prefix}.build`));
+  }
 
   const image = validateDigestPinnedImageRef(
     asString(record.image, `${prefix}.image`),

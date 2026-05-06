@@ -16,12 +16,8 @@ const localManifestYaml = `name: sample-app
 version: 1.0.0
 compute:
   gateway:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build-gateway
-        artifact: gateway-dist
-        artifactPath: dist/gateway.mjs
+    image: ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333
+    port: 8080
 `;
 
 async function withTempProject<T>(
@@ -29,29 +25,10 @@ async function withTempProject<T>(
 ): Promise<T> {
   const originalCwd = Deno.cwd();
   const projectDir = await Deno.makeTempDir({ prefix: "takos-deploy-" });
-  await fs.mkdir(path.join(projectDir, ".takos", "workflows"), {
-    recursive: true,
-  });
-  await fs.mkdir(path.join(projectDir, "dist"), { recursive: true });
+  await fs.mkdir(path.join(projectDir, ".takos"), { recursive: true });
   await fs.writeFile(
     path.join(projectDir, ".takos", "app.yml"),
     localManifestYaml,
-    "utf8",
-  );
-  await fs.writeFile(
-    path.join(projectDir, ".takos", "workflows", "build.yml"),
-    `name: build-gateway
-jobs:
-  build-gateway:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo build
-`,
-    "utf8",
-  );
-  await fs.writeFile(
-    path.join(projectDir, "dist", "gateway.mjs"),
-    'export default { async fetch() { return new Response("ok"); } };',
     "utf8",
   );
   Deno.chdir(projectDir);
@@ -327,7 +304,7 @@ Deno.test("deploy command - omits group when --group is not provided", async () 
 });
 
 Deno.test(
-  "deploy command - creates a deployment from a local manifest and forwards artifacts",
+  "deploy command - creates a deployment from a local image manifest",
   async () => {
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
       const request = init as RequestInit | undefined;
@@ -366,23 +343,10 @@ Deno.test(
         assertEquals(body.mode, "apply");
         assertEquals(body.group, "demo-group");
         assertEquals(body.source.kind, "inline");
-        assertEquals(body.source.artifacts.length, 1);
-        assertEquals(body.source.artifacts[0].compute, "gateway");
+        assertEquals(body.source.artifacts, []);
         assertEquals(
-          body.source.artifacts[0].workflow.path,
-          ".takos/workflows/build.yml",
-        );
-        assertEquals(body.source.artifacts[0].workflow.job, "build-gateway");
-        assertEquals(body.source.artifacts[0].files.length, 1);
-        assertEquals(
-          body.source.artifacts[0].files[0].path,
-          "dist/gateway.mjs",
-        );
-        assertEquals(
-          body.source.artifacts[0].files[0].content,
-          btoa(
-            'export default { async fetch() { return new Response("ok"); } };',
-          ),
+          body.manifest.compute.gateway.image,
+          "ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333",
         );
       });
     } finally {
@@ -453,131 +417,7 @@ Deno.test(
   },
 );
 
-Deno.test(
-  "deploy command - runs workflow steps before collecting local artifacts",
-  async () => {
-    const fetchStub = stub(globalThis, "fetch", (input, init) => {
-      const request = init as RequestInit | undefined;
-      assertEquals(
-        String(input),
-        "https://takos.jp/api/public/v1/deployments",
-      );
-      assertEquals(request?.method, "POST");
-      return Promise.resolve(
-        new Response(JSON.stringify(deploymentResponse), {
-          status: 201,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    });
-    const logSpy = stub(console, "log", () => {});
-    setAuthEnv();
-
-    try {
-      await withTempProject(async (projectDir) => {
-        await fs.rm(path.join(projectDir, "dist", "gateway.mjs"));
-        await fs.writeFile(
-          path.join(projectDir, ".takos", "workflows", "build.yml"),
-          `name: build-gateway
-jobs:
-  build-gateway:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          mkdir -p dist
-          cat <<'EOF' > dist/gateway.mjs
-          export default { async fetch() { return new Response("ok"); } };
-          EOF
-`,
-          "utf8",
-        );
-
-        const program = createDeployProgram();
-        await program.parseAsync([
-          "node",
-          "takos",
-          "deploy",
-          "--group",
-          "demo-group",
-          "--auto-approve",
-        ], { from: "node" });
-
-        assertSpyCalls(fetchStub, 1);
-        const requestInit = fetchStub.calls[0]?.args[1] as
-          | RequestInit
-          | undefined;
-        const body = JSON.parse(String(requestInit?.body));
-        assertEquals(body.source.kind, "inline");
-        assertEquals(body.source.artifacts.length, 1);
-        assertEquals(
-          body.source.artifacts[0].files[0].path,
-          "dist/gateway.mjs",
-        );
-        assertEquals(
-          body.source.artifacts[0].files[0].content,
-          btoa(
-            'export default { async fetch() { return new Response("ok"); } };\n',
-          ),
-        );
-      });
-    } finally {
-      fetchStub.restore();
-      logSpy.restore();
-      clearAuthEnv();
-    }
-  },
-);
-
-Deno.test(
-  "deploy command - stops before API call when workflow step fails",
-  async () => {
-    const fetchStub = stub(
-      globalThis,
-      "fetch",
-      () => Promise.reject(new Error("fetch should not be called")),
-    );
-    const logSpy = stub(console, "log", () => {});
-    setAuthEnv();
-
-    try {
-      await withTempProject(async (projectDir) => {
-        await fs.rm(path.join(projectDir, "dist", "gateway.mjs"));
-        await fs.writeFile(
-          path.join(projectDir, ".takos", "workflows", "build.yml"),
-          `name: build-gateway
-jobs:
-  build-gateway:
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 2
-`,
-          "utf8",
-        );
-
-        const program = createDeployProgram();
-        await assertRejects(
-          () =>
-            program.parseAsync([
-              "node",
-              "takos",
-              "deploy",
-              "--group",
-              "demo-group",
-              "--auto-approve",
-            ], { from: "node" }),
-          CliCommandExit,
-        );
-      });
-      assertSpyCalls(fetchStub, 0);
-    } finally {
-      fetchStub.restore();
-      logSpy.restore();
-      clearAuthEnv();
-    }
-  },
-);
-
-Deno.test("deploy command - fails local preview before API call when worker artifact is missing", async () => {
+Deno.test("deploy command - rejects local worker manifests before the API call", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -588,7 +428,15 @@ Deno.test("deploy command - fails local preview before API call when worker arti
 
   try {
     await withTempProject(async (projectDir) => {
-      await fs.rm(path.join(projectDir, "dist", "gateway.mjs"));
+      await fs.writeFile(
+        path.join(projectDir, ".takos", "app.yml"),
+        `name: worker-app
+compute:
+  gateway:
+    kind: worker
+`,
+        "utf8",
+      );
       const program = createDeployProgram();
       await assertRejects(
         () =>
@@ -604,6 +452,9 @@ Deno.test("deploy command - fails local preview before API call when worker arti
       );
     });
     assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(logOutput(logSpy.calls), "takosumi-git init");
+    assertStringIncludes(logOutput(logSpy.calls), "takosumi-git push");
+    assertStringIncludes(logOutput(logSpy.calls), 'source.kind="manifest"');
   } finally {
     fetchStub.restore();
     logSpy.restore();
@@ -719,56 +570,6 @@ Deno.test("deploy command - rejects --ref-type for local manifest deploys", asyn
     clearAuthEnv();
   }
 });
-
-Deno.test(
-  "deploy command - fails local preview before API call for ambiguous worker artifact directories",
-  async () => {
-    const fetchStub = stub(
-      globalThis,
-      "fetch",
-      () => Promise.reject(new Error("fetch should not be called")),
-    );
-    const logSpy = stub(console, "log", () => {});
-    setAuthEnv();
-
-    try {
-      await withTempProject(async (projectDir) => {
-        await fs.writeFile(
-          path.join(projectDir, ".takos", "app.yml"),
-          localManifestYaml.replace(
-            "artifactPath: dist/gateway.mjs",
-            "artifactPath: dist",
-          ),
-          "utf8",
-        );
-        await fs.writeFile(
-          path.join(projectDir, "dist", "chunk.js"),
-          "export const chunk = true;",
-          "utf8",
-        );
-
-        const program = createDeployProgram();
-        await assertRejects(
-          () =>
-            program.parseAsync([
-              "node",
-              "takos",
-              "deploy",
-              "--group",
-              "demo-group",
-              "--preview",
-            ], { from: "node" }),
-          CliCommandExit,
-        );
-      });
-      assertSpyCalls(fetchStub, 0);
-    } finally {
-      fetchStub.restore();
-      logSpy.restore();
-      clearAuthEnv();
-    }
-  },
-);
 
 Deno.test(
   "deploy command - rejects --preview combined with --resolve-only",

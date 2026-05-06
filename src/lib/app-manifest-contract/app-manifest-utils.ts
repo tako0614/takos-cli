@@ -1,5 +1,3 @@
-import type { WorkflowDiagnostic } from "takos-actions-engine";
-
 // --- parsing utility helpers ---
 
 export function asRecord(value: unknown): Record<string, unknown> {
@@ -103,10 +101,4 @@ export function normalizeRepoRelativePath(path: string, field: string): string {
     throw new Error(`${field} must not contain path traversal`);
   }
   return normalized;
-}
-
-export function filterWorkflowErrors(
-  diagnostics: WorkflowDiagnostic[],
-): WorkflowDiagnostic[] {
-  return diagnostics.filter((diagnostic) => diagnostic.severity === "error");
 }

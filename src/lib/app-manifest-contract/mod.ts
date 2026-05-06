@@ -9,7 +9,6 @@ export type {
   AppResourceType,
   AppRoute,
   AppTriggers,
-  BuildConfig,
   BundleDoc,
   CloudflareComputeConfig,
   CloudflareContainerConfig,
@@ -26,8 +25,3 @@ export {
   parseAppManifestText,
   parseAppManifestYaml,
 } from "./app-manifest-parser/index.ts";
-
-export {
-  parseAndValidateWorkflowYaml,
-  validateDeployProducerJob,
-} from "./app-manifest-validation.ts";

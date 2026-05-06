@@ -1,6 +1,6 @@
 import process from "node:process";
 import type { Command } from "commander";
-import { cyan, dim, red, yellow } from "@std/fmt/colors";
+import { cyan, dim, red } from "@std/fmt/colors";
 import { confirmPrompt, printJson, resolveSpaceId } from "../lib/cli-utils.ts";
 import { CliCommandExit, cliExit } from "../lib/command-exit.ts";
 import {
@@ -8,10 +8,6 @@ import {
   loadAppManifest,
   resolveAppManifestPath,
 } from "../lib/app-manifest.ts";
-import {
-  collectArtifactsForManifest,
-  resolveWorkspaceDir,
-} from "../lib/artifact-collector.ts";
 import {
   createDeployment,
   type CreateDeploymentRequest,
@@ -35,6 +31,12 @@ export type DeployCommandOptions = {
   autoApprove?: boolean;
   json?: boolean;
 };
+
+const LOCAL_WORKER_DEPLOY_GUIDANCE =
+  "Local Takos CLI deploy no longer builds or collects worker artifacts. " +
+  "Use takosumi-git to resolve workflow/build artifacts upstream " +
+  "(takosumi-git init, then takosumi-git push), or use the public deployment " +
+  'API with source.kind="manifest" artifact input.';
 
 function validateRepositoryUrl(
   repositoryUrl: string | undefined,
@@ -113,6 +115,21 @@ async function loadLocalManifest(
   return { manifest, manifestPath };
 }
 
+function assertLocalManifestDeployableByTakosCli(manifest: AppManifest): void {
+  const workerNames = Object.entries(manifest.compute ?? {})
+    .filter(([, compute]) => compute.kind === "worker")
+    .map(([name]) => name);
+  if (workerNames.length === 0) return;
+
+  console.log(
+    red(
+      `Local manifest contains worker compute (${workerNames.join(", ")}). ` +
+        LOCAL_WORKER_DEPLOY_GUIDANCE,
+    ),
+  );
+  cliExit(1);
+}
+
 function pickMode(options: DeployCommandOptions): DeploymentMode {
   if (options.preview && options.resolveOnly) {
     console.log(
@@ -181,29 +198,11 @@ export async function runDeploy(
     manifest = loaded.manifest;
     manifestPath = loaded.manifestPath;
     inlineManifest = manifest;
-
-    const workspaceDir = resolveWorkspaceDir(manifestPath);
-    let collected;
-    try {
-      collected = await collectArtifactsForManifest(manifest, {
-        workspaceDir,
-        failOnMissing: true,
-        targets: [],
-        quiet: Boolean(options.json),
-      });
-    } catch (error) {
-      console.log(red(error instanceof Error ? error.message : String(error)));
-      cliExit(1);
-    }
-    if (!options.json) {
-      for (const warning of collected.warnings) {
-        console.log(yellow(`Warning: ${warning}`));
-      }
-    }
+    assertLocalManifestDeployableByTakosCli(manifest);
 
     source = {
       kind: "inline",
-      artifacts: collected.artifacts,
+      artifacts: [],
     };
   }
 

@@ -5,7 +5,6 @@
 // Shared validators for the flat-schema manifest parser.
 //
 // Scope:
-//   - Keep workflow YAML helpers used by deploy pipeline
 //   - Keep shared field validators that new parsers reuse:
 //       validateReadinessPath
 //       validateVectorIndexMetric
@@ -13,72 +12,7 @@
 //
 // ============================================================
 
-import {
-  parseWorkflow,
-  validateWorkflow,
-  type Workflow,
-} from "takos-actions-engine";
-import {
-  asOptionalInteger,
-  filterWorkflowErrors,
-} from "./app-manifest-utils.ts";
-
-// ============================================================
-// Workflow YAML helpers
-// ============================================================
-
-export function parseAndValidateWorkflowYaml(
-  raw: string,
-  workflowPath: string,
-): Workflow {
-  const { workflow, diagnostics } = parseWorkflow(raw);
-  const parseErrors = filterWorkflowErrors(diagnostics);
-  if (parseErrors.length > 0) {
-    throw new Error(
-      `Workflow parse error (${workflowPath}): ${
-        parseErrors.map((entry) => entry.message).join(", ")
-      }`,
-    );
-  }
-
-  const validation = validateWorkflow(workflow);
-  const validationErrors = filterWorkflowErrors(validation.diagnostics);
-  if (validationErrors.length > 0) {
-    throw new Error(
-      `Workflow validation error (${workflowPath}): ${
-        validationErrors.map((entry) => entry.message).join(", ")
-      }`,
-    );
-  }
-
-  return workflow;
-}
-
-export function validateDeployProducerJob(
-  workflow: Workflow,
-  workflowPath: string,
-  jobKey: string,
-): void {
-  const job = workflow.jobs[jobKey];
-  if (!job) {
-    throw new Error(`Workflow job not found in ${workflowPath}: ${jobKey}`);
-  }
-  if (job.needs) {
-    throw new Error(
-      `Deploy producer job must not use needs (${workflowPath}#${jobKey})`,
-    );
-  }
-  if (job.strategy) {
-    throw new Error(
-      `Deploy producer job must not use strategy.matrix (${workflowPath}#${jobKey})`,
-    );
-  }
-  if (job.services) {
-    throw new Error(
-      `Deploy producer job must not use services (${workflowPath}#${jobKey})`,
-    );
-  }
-}
+import { asOptionalInteger } from "./app-manifest-utils.ts";
 
 // ============================================================
 // Readiness path validator (compute.<name>.readiness)

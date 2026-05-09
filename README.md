@@ -76,17 +76,18 @@ takos apply DEPLOYMENT_RECORD_ID
 takos deploy --env staging --group GROUP_NAME
 takos deploy --env production --group GROUP_NAME
 takos deploy https://github.com/acme/my-app.git --ref main --group GROUP_NAME
-takos install owner/repo --version v1.0.0 --group GROUP_NAME
 takos rollback GROUP_NAME
 ```
 
 `takos deploy` の local manifest path は digest-pinned image manifest 向けです。
 worker bundle や workflow/build artifact の解決は `takosumi-git init` /
 `takosumi-git push` 側で行います。 `takos deploy URL --ref ...` は developer /
-advanced な repository deploy です。 `takos install owner/repo` は catalog item
-を repository source に解決して同じ deployment record / rollback pipeline
-に入れます。 `takos deploy --preview` は remote state を変更しない in-memory
-preview、`takos deploy --resolve-only` は Deployment record を作成して
+advanced な repository deploy です。新規 AppInstallation install は
+`takosumi-git install` または Takosumi Accounts install API を使います。
+`takos install owner/repo` は legacy catalog deploy sugar として残るだけで、
+catalog item を repository source に解決して compatibility deployment pipeline
+に渡します。 `takos deploy --preview` は remote state を変更しない in-memory
+preview、`takos deploy --resolve-only` は Deployment record を作成し、後続の
 `takos apply` 待ちにします。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に

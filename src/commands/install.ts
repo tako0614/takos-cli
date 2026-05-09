@@ -1,15 +1,13 @@
 /**
  * `takos install <packageRef>`
  *
- * Catalog-aware sugar over `takos deploy`. Resolves the requested OWNER/REPO
- * (and optional version) through the public package explore endpoints, then
- * delegates to `runDeploy()` so the install flow shares the v3 Deployment
- * lifecycle path: `POST /api/public/v1/deployments` with `mode="apply"`
- * (or `"preview"` when `--plan` is set).
+ * Legacy catalog-aware sugar over `takos deploy`. Current Installable App
+ * installs are owned by Takosumi Accounts + takosumi-git; this command remains
+ * as a compatibility wrapper around `POST /api/public/v1/deployments`.
  */
 
 import type { Command } from "commander";
-import { red } from "@std/fmt/colors";
+import { dim, red } from "@std/fmt/colors";
 import { api } from "../lib/api.ts";
 import { CliCommandExit, cliExit } from "../lib/command-exit.ts";
 import { runDeploy } from "./deploy.ts";
@@ -106,6 +104,14 @@ export async function runInstall(
     cliExit(1);
   }
 
+  if (!options.json) {
+    console.log(
+      dim(
+        "takos install is legacy catalog deploy sugar; use `takosumi-git install` or Takosumi Accounts install APIs for new AppInstallation installs.",
+      ),
+    );
+  }
+
   let resolvedSource: {
     repositoryUrl: string;
     tag: string;
@@ -139,7 +145,7 @@ export async function runInstall(
 export function registerInstallCommand(program: Command): void {
   program
     .command("install <packageRef>")
-    .description("Install an app from the Takos package catalog")
+    .description("Legacy catalog deploy sugar; new installs use takosumi-git")
     .option("--version <version>", "Release version or tag")
     .option(
       "--group <name>",

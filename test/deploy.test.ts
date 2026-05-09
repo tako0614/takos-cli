@@ -173,6 +173,7 @@ Deno.test("deploy command - creates a deployment from a repository URL", async (
       "takos",
       "deploy",
       "  https://github.com/acme/demo.git  ",
+      "--legacy-repo-source",
       "--ref",
       "main",
       "--ref-type",
@@ -249,6 +250,7 @@ Deno.test("deploy command - rejects invalid repository URLs before the API call"
             "takos",
             "deploy",
             repositoryUrl,
+            "--legacy-repo-source",
             "--auto-approve",
           ], { from: "node" }),
         CliCommandExit,
@@ -288,6 +290,7 @@ Deno.test("deploy command - omits group when --group is not provided", async () 
       "takos",
       "deploy",
       "https://github.com/acme/demo.git",
+      "--legacy-repo-source",
       "--auto-approve",
     ], { from: "node" });
 
@@ -324,12 +327,14 @@ Deno.test(
     setAuthEnv();
 
     try {
-      await withTempProject(async () => {
+      await withTempProject(async (projectDir) => {
         const program = createDeployProgram();
         await program.parseAsync([
           "node",
           "takos",
           "deploy",
+          "--manifest",
+          path.join(projectDir, ".takos", "app.yml"),
           "--group",
           "demo-group",
           "--auto-approve",
@@ -389,12 +394,14 @@ Deno.test(
     setAuthEnv();
 
     try {
-      await withTempProject(async () => {
+      await withTempProject(async (projectDir) => {
         const program = createDeployProgram();
         await program.parseAsync([
           "node",
           "takos",
           "deploy",
+          "--manifest",
+          path.join(projectDir, ".takos", "app.yml"),
           "--group",
           "demo-group",
           "--json",
@@ -444,6 +451,8 @@ compute:
             "node",
             "takos",
             "deploy",
+            "--manifest",
+            path.join(projectDir, ".takos", "app.yml"),
             "--group",
             "demo-group",
             "--preview",
@@ -454,7 +463,10 @@ compute:
     assertSpyCalls(fetchStub, 0);
     assertStringIncludes(logOutput(logSpy.calls), "takosumi-git init");
     assertStringIncludes(logOutput(logSpy.calls), "takosumi-git push");
-    assertStringIncludes(logOutput(logSpy.calls), 'source.kind="manifest"');
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "digest-pinned image manifest",
+    );
   } finally {
     fetchStub.restore();
     logSpy.restore();
@@ -491,6 +503,41 @@ Deno.test("deploy command - rejects repository URLs combined with --manifest", a
     assertStringIncludes(
       logOutput(logSpy.calls),
       "--manifest cannot be used together with a repository URL.",
+    );
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
+Deno.test("deploy command - rejects repository URLs without legacy opt-in", async () => {
+  const fetchStub = stub(
+    globalThis,
+    "fetch",
+    () => Promise.reject(new Error("fetch should not be called")),
+  );
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    const program = createDeployProgram();
+    await assertRejects(
+      () =>
+        program.parseAsync([
+          "node",
+          "takos",
+          "deploy",
+          "https://github.com/acme/demo.git",
+          "--auto-approve",
+        ], { from: "node" }),
+      CliCommandExit,
+    );
+
+    assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "Repository URL deploy is legacy compatibility sugar",
     );
   } finally {
     fetchStub.restore();
@@ -730,9 +777,10 @@ Deno.test("deploy rollback command - accepts canonical head response shape", asy
   }
 });
 
-Deno.test("deploy command - requires a repository URL or local manifest", async () => {
+Deno.test("deploy command - requires an explicit local manifest", async () => {
   const program = createDeployProgram();
   const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
 
   try {
     await assertRejects(
@@ -743,8 +791,13 @@ Deno.test("deploy command - requires a repository URL or local manifest", async 
       },
       CliCommandExit,
     );
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "Local deploys require --manifest <path>.",
+    );
   } finally {
     logSpy.restore();
+    clearAuthEnv();
   }
 });
 
@@ -778,6 +831,7 @@ Deno.test(
         "takos",
         "deploy",
         "https://github.com/acme/demo.git",
+        "--legacy-repo-source",
         "--ref",
         "main",
         "--ref-type",
@@ -841,6 +895,7 @@ Deno.test(
         "takos",
         "deploy",
         "https://github.com/acme/demo.git",
+        "--legacy-repo-source",
         "--ref",
         "main",
         "--ref-type",

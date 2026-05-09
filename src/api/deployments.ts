@@ -36,12 +36,6 @@ export interface DeploymentInlineArtifactFile {
 
 export interface DeploymentInlineArtifact {
   compute: string;
-  workflow?: {
-    path: string;
-    job: string;
-    artifact?: string;
-    artifactPath?: string;
-  };
   files: DeploymentInlineArtifactFile[];
 }
 

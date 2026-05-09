@@ -102,6 +102,7 @@ Deno.test(
         "takos",
         "install",
         "acme/demo",
+        "--legacy-deploy",
         "--plan",
         "--group",
         "demo-group",
@@ -173,6 +174,7 @@ Deno.test("install command - omits group when --group is not provided", async ()
       "takos",
       "install",
       "acme/demo",
+      "--legacy-deploy",
       "--plan",
     ], { from: "node" });
 
@@ -181,6 +183,41 @@ Deno.test("install command - omits group when --group is not provided", async ()
     const body = JSON.parse(String(planRequest?.body));
     assertEquals("group" in body, false);
     assertEquals(body.source.kind, "git");
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
+Deno.test("install command - requires legacy deploy opt-in before catalog lookup", async () => {
+  const fetchStub = stub(
+    globalThis,
+    "fetch",
+    () => Promise.reject(new Error("fetch should not be called")),
+  );
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    const program = createProgram();
+    await assertRejects(
+      () =>
+        program.parseAsync([
+          "node",
+          "takos",
+          "install",
+          "acme/demo",
+          "--plan",
+        ], { from: "node" }),
+      CliCommandExit,
+    );
+
+    assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "takos install is legacy catalog deploy sugar",
+    );
   } finally {
     fetchStub.restore();
     logSpy.restore();

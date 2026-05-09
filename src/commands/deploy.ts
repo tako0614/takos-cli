@@ -1,13 +1,8 @@
-import process from "node:process";
 import type { Command } from "commander";
 import { cyan, dim, red } from "@std/fmt/colors";
 import { confirmPrompt, printJson, resolveSpaceId } from "../lib/cli-utils.ts";
 import { CliCommandExit, cliExit } from "../lib/command-exit.ts";
-import {
-  type AppManifest,
-  loadAppManifest,
-  resolveAppManifestPath,
-} from "../lib/app-manifest.ts";
+import { type AppManifest, loadAppManifest } from "../lib/app-manifest.ts";
 import {
   createDeployment,
   type CreateDeploymentRequest,
@@ -30,13 +25,19 @@ export type DeployCommandOptions = {
   resolveOnly?: boolean;
   autoApprove?: boolean;
   json?: boolean;
+  legacyRepoSource?: boolean;
 };
 
 const LOCAL_WORKER_DEPLOY_GUIDANCE =
   "Local Takos CLI deploy no longer builds or collects worker artifacts. " +
   "Use takosumi-git to resolve workflow/build artifacts upstream " +
-  "(takosumi-git init, then takosumi-git push), or use the public deployment " +
-  'API with source.kind="manifest" artifact input.';
+  "(takosumi-git init, then takosumi-git push) and submit a digest-pinned " +
+  "image manifest to Takos.";
+
+const LEGACY_REPOSITORY_SOURCE_MESSAGE =
+  "Repository URL deploy is legacy compatibility sugar. Use takosumi-git " +
+  "push for source-driven deploys, or pass --legacy-repo-source to call the " +
+  "compatibility deployment API intentionally.";
 
 function validateRepositoryUrl(
   repositoryUrl: string | undefined,
@@ -87,21 +88,11 @@ function validateRepositoryUrl(
 async function loadLocalManifest(
   manifestOption: string | undefined,
 ): Promise<{ manifest: AppManifest; manifestPath: string }> {
-  let manifestPath: string;
-  if (manifestOption) {
-    manifestPath = manifestOption;
-  } else {
-    try {
-      manifestPath = await resolveAppManifestPath(process.cwd());
-    } catch {
-      console.log(
-        red(
-          "No deploy manifest found. Specify --manifest or run from a project root.",
-        ),
-      );
-      cliExit(1);
-    }
+  if (!manifestOption?.trim()) {
+    console.log(red("Local deploys require --manifest <path>."));
+    cliExit(1);
   }
+  const manifestPath = manifestOption.trim();
 
   let manifest: AppManifest;
   try {
@@ -162,8 +153,7 @@ export async function runDeploy(
   const env = options.env || "staging";
   const mode = pickMode(options);
 
-  const normalizedRepositoryUrl = validateRepositoryUrl(repositoryUrl);
-  const usingRepositoryUrl = Boolean(normalizedRepositoryUrl);
+  const usingRepositoryUrl = Boolean(repositoryUrl?.trim());
   if (!usingRepositoryUrl && (options.ref || options.refType)) {
     console.log(
       red("--ref and --ref-type can only be used with a repository URL."),
@@ -177,6 +167,18 @@ export async function runDeploy(
     );
     cliExit(1);
   }
+
+  if (usingRepositoryUrl && !options.legacyRepoSource) {
+    console.log(red(LEGACY_REPOSITORY_SOURCE_MESSAGE));
+    cliExit(1);
+  }
+
+  if (!usingRepositoryUrl && options.legacyRepoSource) {
+    console.log(red("--legacy-repo-source requires a repository URL."));
+    cliExit(1);
+  }
+
+  const normalizedRepositoryUrl = validateRepositoryUrl(repositoryUrl);
 
   const spaceId = resolveSpaceId(options.space);
   const groupName = options.group?.trim();
@@ -287,11 +289,11 @@ export function registerDeployCommand(program: Command): void {
   program
     .command("deploy")
     .description(
-      "Deploy a local manifest or repository (default: resolve + apply)",
+      "Deploy an explicit local manifest (default: resolve + apply)",
     )
     .argument(
       "[repositoryUrl]",
-      "Optional canonical HTTPS git repository URL (defaults to local .takos/app.yml or .takos/app.yaml)",
+      "Legacy canonical HTTPS git repository URL (requires --legacy-repo-source)",
     )
     .option("--space <id>", "Target space ID")
     .option("--env <env>", "Target environment", "staging")
@@ -301,7 +303,7 @@ export function registerDeployCommand(program: Command): void {
     )
     .option(
       "--manifest <path>",
-      "Local deploy manifest path (default: .takos/app.yml or .takos/app.yaml)",
+      "Local deploy manifest path",
     )
     .option("--ref <ref>", "Branch / tag / commit (repository URL only)")
     .option(
@@ -318,6 +320,10 @@ export function registerDeployCommand(program: Command): void {
     )
     .option("--auto-approve", "Skip interactive confirmation prompt")
     .option("--json", "Machine-readable output")
+    .option(
+      "--legacy-repo-source",
+      "Use the legacy repository source compatibility path",
+    )
     .action(
       async (
         repositoryUrl: string | undefined,

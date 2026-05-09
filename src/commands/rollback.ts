@@ -2,20 +2,14 @@
  * `takos rollback [<group>]`
  *
  * Atomically flips GroupHead to the previous Deployment by calling
- * `POST /api/public/v1/groups/:group_id/rollback`. When the group argument is
- * omitted, the CLI falls back to the manifest's group (resolved from the
- * working directory's `.takos/app.yml`).
+ * `POST /api/public/v1/groups/:group_id/rollback`. The group argument is
+ * required so rollback targets are explicit.
  */
 
-import process from "node:process";
 import type { Command } from "commander";
 import { cyan, dim, red } from "@std/fmt/colors";
 import { printJson, resolveSpaceId } from "../lib/cli-utils.ts";
 import { CliCommandExit, cliExit } from "../lib/command-exit.ts";
-import {
-  loadAppManifest,
-  resolveAppManifestPath,
-} from "../lib/app-manifest.ts";
 import { groupHeadFromResponse, rollbackGroup } from "../api/deployments.ts";
 import {
   printDeploymentHeader,
@@ -28,38 +22,13 @@ export type RollbackCommandOptions = {
   json?: boolean;
 };
 
-async function resolveGroupName(
+function resolveGroupName(
   groupArg: string | undefined,
-): Promise<string> {
+): string {
   if (groupArg && groupArg.trim()) return groupArg.trim();
 
-  let manifestPath: string;
-  try {
-    manifestPath = await resolveAppManifestPath(process.cwd());
-  } catch {
-    console.log(
-      red(
-        "Group name is required. Pass <group> or run from a project root with .takos/app.yml.",
-      ),
-    );
-    cliExit(1);
-  }
-
-  try {
-    const manifest = await loadAppManifest(manifestPath);
-    const name = (manifest as { name?: string }).name?.trim();
-    if (!name) {
-      console.log(
-        red("Manifest has no `name` field; pass <group> explicitly."),
-      );
-      cliExit(1);
-    }
-    return name;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.log(red(`Invalid manifest: ${message}`));
-    cliExit(1);
-  }
+  console.log(red("Group name is required. Pass <group> explicitly."));
+  cliExit(1);
 }
 
 export async function runRollback(
@@ -67,7 +36,7 @@ export async function runRollback(
   options: RollbackCommandOptions,
 ): Promise<void> {
   const spaceId = resolveSpaceId(options.space);
-  const groupName = await resolveGroupName(groupArg);
+  const groupName = resolveGroupName(groupArg);
 
   if (!options.json) {
     console.log("");
@@ -114,7 +83,7 @@ export function registerRollbackCommand(program: Command): void {
     .description(
       "Roll back a group to its previous Deployment (flip GroupHead)",
     )
-    .argument("[group]", "Group name (defaults to manifest name)")
+    .argument("[group]", "Group name (required)")
     .option("--space <id>", "Target space ID")
     .option(
       "--target-id <deploymentId>",

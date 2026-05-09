@@ -38,6 +38,7 @@ type InstallCommandOptions = {
   plan?: boolean;
   autoApprove?: boolean;
   json?: boolean;
+  legacyDeploy?: boolean;
 };
 
 function parseOwnerRepo(input: string): { owner: string; repoName: string } {
@@ -104,6 +105,15 @@ export async function runInstall(
     cliExit(1);
   }
 
+  if (!options.legacyDeploy) {
+    console.log(
+      red(
+        "takos install is legacy catalog deploy sugar. Use `takosumi-git install` or Takosumi Accounts install APIs; pass --legacy-deploy only for the compatibility deployment path.",
+      ),
+    );
+    cliExit(1);
+  }
+
   if (!options.json) {
     console.log(
       dim(
@@ -139,6 +149,7 @@ export async function runInstall(
     preview: options.plan,
     autoApprove: options.autoApprove,
     json: options.json,
+    legacyRepoSource: true,
   });
 }
 
@@ -156,6 +167,10 @@ export function registerInstallCommand(program: Command): void {
     .option("--plan", "Dry-run preview without mutating remote state")
     .option("--auto-approve", "Skip interactive confirmation prompt")
     .option("--json", "Machine-readable output")
+    .option(
+      "--legacy-deploy",
+      "Use the legacy catalog-to-repository deployment path",
+    )
     .action(async (packageRef: string, options: InstallCommandOptions) => {
       try {
         await runInstall(packageRef, options);

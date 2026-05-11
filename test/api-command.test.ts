@@ -101,6 +101,7 @@ Deno.test("api command registration - exposes only the documented public surface
       "deploy",
       "rollback",
       "install",
+      "installations",
       "uninstall",
       "resource",
       "group",

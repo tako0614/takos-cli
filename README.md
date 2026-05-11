@@ -69,6 +69,23 @@ Takosumi Accounts or `--create-pat` with an Accounts session bearer.
 bearer and stores the returned `takpat_...`; it does not use the retired Takos
 app-local token issuer.
 
+AppInstallation ledger inspection:
+
+```bash
+takos installations list \
+  --accounts-url https://accounts.example.com \
+  --space space_personal
+takos installations inspect inst_01J \
+  --accounts-url https://accounts.example.com
+```
+
+`takos installations` talks directly to Takosumi Accounts
+`GET /v1/installations` and `GET /v1/installations/{id}`. It uses the bearer
+stored by `takos login --token` by default; pass `--token` or set
+`TAKOSUMI_ACCOUNTS_TOKEN` for a one-off Accounts bearer. The Accounts base URL
+must come from `--accounts-url` or `TAKOSUMI_ACCOUNTS_URL`; it is not inferred
+from the Takos API URL.
+
 endpoint 切り替え:
 
 ```bash

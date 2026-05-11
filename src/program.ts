@@ -10,6 +10,7 @@ import { registerDiffCommand } from "./commands/diff.ts";
 import { registerApproveCommand } from "./commands/approve.ts";
 import { registerRollbackCommand } from "./commands/rollback.ts";
 import { registerInstallCommand } from "./commands/install.ts";
+import { registerInstallationsCommand } from "./commands/installations.ts";
 import { registerUninstallCommand } from "./commands/uninstall.ts";
 import { registerResourceCommand } from "./commands/resource.ts";
 import { registerGroupCommand } from "./commands/group/index.ts";
@@ -31,6 +32,7 @@ const AUTH_OPTIONAL_COMMANDS = new Set([
   "approve",
   "rollback",
   "install",
+  "installations",
   "uninstall",
   "resource",
   "group",
@@ -53,6 +55,7 @@ export function createProgram(argv: string[] = process.argv): Command {
   registerApproveCommand(program);
   registerRollbackCommand(program);
   registerInstallCommand(program);
+  registerInstallationsCommand(program);
   registerUninstallCommand(program);
   registerResourceCommand(program);
   registerGroupCommand(program);

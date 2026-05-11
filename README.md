@@ -93,12 +93,15 @@ digest-pinned image manifest 向けです。 worker bundle や workflow/build ar
 の解決は `takosumi-git init` / `takosumi-git push` 側で行います。
 `takos deploy URL --ref ...` は `--legacy-repo-source` を渡したときだけ残る
 compatibility path です。新規 AppInstallation install は `takosumi-git install`
-または Takosumi Accounts install API を使います。 `takos install owner/repo` は
-legacy catalog deploy sugar として残るだけで、 `--legacy-deploy`
-を渡したときだけ catalog item を repository source に解決して compatibility
-deployment pipeline に渡します。 `takos deploy --preview` は remote state
-を変更しない in-memory preview、`takos deploy --resolve-only` は Deployment
-record を作成し、後続の `takos apply` 待ちにします。
+または Takosumi Accounts install API を使います。runtime mode は
+`takosumi-git install --mode shared-cell|dedicated|self-hosted` で選択し、
+省略時は `.takosumi/app.yml` の `runtime.modes` 先頭値、Takos-first app では
+`shared-cell` を使います。 `takos install owner/repo` は legacy catalog deploy
+sugar として残るだけで、 `--legacy-deploy` を渡したときだけ catalog item を
+repository source に解決して compatibility deployment pipeline に渡します。
+`takos deploy --preview` は remote state を変更しない in-memory
+preview、`takos deploy --resolve-only` は Deployment record を作成し、後続の
+`takos apply` 待ちにします。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。

@@ -53,10 +53,21 @@ deno run --allow-all src/index.ts --help
 認証:
 
 ```bash
-takos login
+takos login --api-url https://takos.example.com --token takpat_...
+takos login --api-url https://takos.example.com \
+  --create-pat \
+  --accounts-url https://accounts.example.com \
+  --session-token sess_...
 takos whoami
 takos logout
 ```
+
+`takos login` stores a Takosumi Accounts PAT or bearer token locally. The old
+Takos `/auth/cli` browser callback is retired in current deployments; use
+`--legacy-browser` only for compatibility deployments that still expose it.
+`--create-pat` calls Takosumi Accounts `POST /v1/account/tokens` with a session
+bearer and stores the returned `takpat_...`; it does not use the retired Takos
+app-local token issuer.
 
 endpoint 切り替え:
 
@@ -69,11 +80,11 @@ takos endpoint show
 deploy manifest ベースの deploy flow:
 
 ```bash
-takos deploy --manifest .takos/app.yml --preview --group GROUP_NAME
-takos deploy --manifest .takos/app.yml --resolve-only --group GROUP_NAME
+takos deploy --manifest .takosumi/manifest.yml --preview --group GROUP_NAME
+takos deploy --manifest .takosumi/manifest.yml --resolve-only --group GROUP_NAME
 takos apply DEPLOYMENT_RECORD_ID
-takos deploy --manifest .takos/app.yml --env staging --group GROUP_NAME
-takos deploy --manifest .takos/app.yml --env production --group GROUP_NAME
+takos deploy --manifest .takosumi/manifest.yml --env staging --group GROUP_NAME
+takos deploy --manifest .takosumi/manifest.yml --env production --group GROUP_NAME
 takos rollback GROUP_NAME
 ```
 

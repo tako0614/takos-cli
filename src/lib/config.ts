@@ -21,4 +21,4 @@ export {
   saveToken,
 } from "./config-auth.ts";
 
-export { getApiRequestTimeoutMs, getLoginTimeoutMs } from "./config-timeout.ts";
+export { getApiRequestTimeoutMs } from "./config-timeout.ts";

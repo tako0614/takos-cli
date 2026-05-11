@@ -10,9 +10,7 @@ import { logWarning } from "./cli-log.ts";
 
 const SHARED_TIMEOUT_ENV_VAR = "TAKOS_TIMEOUT_MS";
 const API_TIMEOUT_ENV_VAR = "TAKOS_API_TIMEOUT_MS";
-const LOGIN_TIMEOUT_ENV_VAR = "TAKOS_LOGIN_TIMEOUT_MS";
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
-const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60_000;
 
 function resolveTimeoutMs(envVar: string, defaultMs: number): number {
   for (const name of [envVar, SHARED_TIMEOUT_ENV_VAR]) {
@@ -29,8 +27,4 @@ function resolveTimeoutMs(envVar: string, defaultMs: number): number {
 
 export function getApiRequestTimeoutMs(): number {
   return resolveTimeoutMs(API_TIMEOUT_ENV_VAR, DEFAULT_API_REQUEST_TIMEOUT_MS);
-}
-
-export function getLoginTimeoutMs(): number {
-  return resolveTimeoutMs(LOGIN_TIMEOUT_ENV_VAR, DEFAULT_LOGIN_TIMEOUT_MS);
 }

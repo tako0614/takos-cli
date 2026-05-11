@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import {
   getApiRequestTimeoutMs,
   getConfig,
-  getLoginTimeoutMs,
   validateApiUrl,
 } from "../src/lib/config.ts";
 
@@ -13,7 +12,6 @@ import { assertEquals } from "jsr:@std/assert";
 const MANAGED_ENV_VARS = [
   "TAKOS_TIMEOUT_MS",
   "TAKOS_API_TIMEOUT_MS",
-  "TAKOS_LOGIN_TIMEOUT_MS",
   "TAKOS_SESSION_ID",
   "TAKOS_TOKEN",
   "TAKOS_API_URL",
@@ -36,7 +34,6 @@ Deno.test("validateApiUrl policy - accepts HTTPS URLs on custom domains", () => 
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -73,7 +70,6 @@ Deno.test("validateApiUrl policy - rejects HTTP on non-localhost domains", () =>
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -110,7 +106,6 @@ Deno.test("validateApiUrl policy - allows localhost HTTP and marks it as insecur
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -148,7 +143,6 @@ Deno.test("validateApiUrl policy - rejects non-HTTP(S) schemes on non-localhost"
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -185,7 +179,6 @@ Deno.test("validateApiUrl policy - rejects URLs with embedded credentials", () =
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -225,7 +218,6 @@ Deno.test("session file mode - falls back to default API URL when session file o
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -273,7 +265,6 @@ Deno.test("session file mode - falls back to default API URL when session file a
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -322,7 +313,6 @@ Deno.test("session file mode - uses session file api_url when schema and policy 
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -371,7 +361,6 @@ Deno.test("session file mode - TAKOS_API_URL overrides session file api_url", ()
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -422,7 +411,6 @@ Deno.test("timeout resolution - uses defaults when env vars are not set", () => 
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -437,7 +425,6 @@ Deno.test("timeout resolution - uses defaults when env vars are not set", () => 
   }
   try {
     assertEquals(getApiRequestTimeoutMs(), 30_000);
-    assertEquals(getLoginTimeoutMs(), 5 * 60_000);
   } finally {
     process.chdir(originalCwd);
 
@@ -459,7 +446,6 @@ Deno.test("timeout resolution - uses shared timeout when specific vars are missi
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -476,7 +462,6 @@ Deno.test("timeout resolution - uses shared timeout when specific vars are missi
     Deno.env.set("TAKOS_TIMEOUT_MS", "45000");
 
     assertEquals(getApiRequestTimeoutMs(), 45_000);
-    assertEquals(getLoginTimeoutMs(), 45_000);
   } finally {
     process.chdir(originalCwd);
 
@@ -498,7 +483,6 @@ Deno.test("timeout resolution - prefers specific timeout vars over the shared ti
   originalEnv = {
     TAKOS_TIMEOUT_MS: Deno.env.get("TAKOS_TIMEOUT_MS"),
     TAKOS_API_TIMEOUT_MS: Deno.env.get("TAKOS_API_TIMEOUT_MS"),
-    TAKOS_LOGIN_TIMEOUT_MS: Deno.env.get("TAKOS_LOGIN_TIMEOUT_MS"),
     TAKOS_SESSION_ID: Deno.env.get("TAKOS_SESSION_ID"),
     TAKOS_TOKEN: Deno.env.get("TAKOS_TOKEN"),
     TAKOS_API_URL: Deno.env.get("TAKOS_API_URL"),
@@ -514,10 +498,8 @@ Deno.test("timeout resolution - prefers specific timeout vars over the shared ti
   try {
     Deno.env.set("TAKOS_TIMEOUT_MS", "45000");
     Deno.env.set("TAKOS_API_TIMEOUT_MS", "12000");
-    Deno.env.set("TAKOS_LOGIN_TIMEOUT_MS", "180000");
 
     assertEquals(getApiRequestTimeoutMs(), 12_000);
-    assertEquals(getLoginTimeoutMs(), 180_000);
   } finally {
     process.chdir(originalCwd);
 

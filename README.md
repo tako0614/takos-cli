@@ -63,8 +63,8 @@ takos logout
 ```
 
 `takos login` stores a Takosumi Accounts PAT or bearer token locally. The old
-Takos `/auth/cli` browser callback is retired in current deployments; use
-`--legacy-browser` only for compatibility deployments that still expose it.
+Takos `/auth/cli` browser callback is removed; use `--token` with a token from
+Takosumi Accounts or `--create-pat` with an Accounts session bearer.
 `--create-pat` calls Takosumi Accounts `POST /v1/account/tokens` with a session
 bearer and stores the returned `takpat_...`; it does not use the retired Takos
 app-local token issuer.

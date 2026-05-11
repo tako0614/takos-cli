@@ -1,14 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
 import { assertEquals, assertRejects } from "jsr:@std/assert";
 import { stub } from "jsr:@std/testing/mock";
-import {
-  type LoginCommandDependencies,
-  registerLoginCommand,
-} from "../src/commands/login.ts";
-import type { RunOAuthCallbackServerOptions } from "../src/commands/login-oauth-callback.ts";
+import { registerLoginCommand } from "../src/commands/login.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 
 const MANAGED_ENV_VARS = [
@@ -63,112 +59,17 @@ function readStoredConfig(configDir: string): Record<string, unknown> {
   }
 }
 
-function writeStoredConfig(
-  configDir: string,
-  config: Record<string, unknown>,
-): void {
-  writeFileSync(join(configDir, "config.json"), JSON.stringify(config));
-}
-
-function registerTestLoginCommand(
-  token: string | null,
-  onRun?: (options: RunOAuthCallbackServerOptions) => void,
-) {
-  const calls: RunOAuthCallbackServerOptions[] = [];
-  const dependencies: LoginCommandDependencies = {
-    openAuthUrl: async () => {},
-    runOAuthCallbackServer: (options) => {
-      calls.push(options);
-      onRun?.(options);
-      return Promise.resolve(token);
-    },
-  };
+function registerTestLoginCommand(): Command {
   const program = new Command();
-  registerLoginCommand(program, dependencies);
-  return { program, calls };
+  registerLoginCommand(program);
+  return program;
 }
 
-Deno.test("login command - persists apiUrl after successful login with --api-url", async () =>
+Deno.test("login command - rejects invalid API URL before storing credentials", async () =>
   await withIsolatedConfig(async (configDir) => {
     const logSpy = stub(console, "log");
     try {
-      const { program, calls } = registerTestLoginCommand("test-token");
-
-      await program.parseAsync([
-        "node",
-        "takos",
-        "login",
-        "--legacy-browser",
-        "--api-url",
-        "https://api.takos.jp",
-      ]);
-
-      assertEquals(calls.length, 1);
-      assertEquals(calls[0].apiUrl, "https://api.takos.jp");
-      assertEquals(calls[0].oauthState.length, 64);
-      const storedConfig = readStoredConfig(configDir);
-      assertEquals(storedConfig.token, "test-token");
-      assertEquals(storedConfig.apiUrl, "https://api.takos.jp");
-    } finally {
-      logSpy.restore();
-    }
-  }));
-
-Deno.test("login command - uses configured endpoint when --api-url is omitted", async () =>
-  await withIsolatedConfig(async (configDir) => {
-    writeStoredConfig(configDir, { apiUrl: "https://test.takos.jp" });
-    const logSpy = stub(console, "log");
-    try {
-      const { program, calls } = registerTestLoginCommand(
-        "configured-endpoint-token",
-      );
-
-      await program.parseAsync(["node", "takos", "login", "--legacy-browser"]);
-
-      assertEquals(calls.length, 1);
-      assertEquals(calls[0].apiUrl, "https://test.takos.jp");
-      const storedConfig = readStoredConfig(configDir);
-      assertEquals(storedConfig.token, "configured-endpoint-token");
-      assertEquals(storedConfig.apiUrl, "https://test.takos.jp");
-    } finally {
-      logSpy.restore();
-    }
-  }));
-
-Deno.test("login command - fails closed and does not persist credentials on callback failure", async () =>
-  await withIsolatedConfig(async (configDir) => {
-    const logSpy = stub(console, "log");
-    try {
-      const { program } = registerTestLoginCommand(null, (options) => {
-        options.onFailure?.("missing_token");
-      });
-
-      await assertRejects(
-        () =>
-          program.parseAsync(["node", "takos", "login", "--legacy-browser"]),
-        CliCommandExit,
-      );
-
-      assertEquals(readStoredConfig(configDir), {});
-    } finally {
-      logSpy.restore();
-    }
-  }));
-
-Deno.test("login command - rejects invalid API URL before starting callback server", async () =>
-  await withIsolatedConfig(async (configDir) => {
-    const logSpy = stub(console, "log");
-    try {
-      let callbackStarted = false;
-      const dependencies: LoginCommandDependencies = {
-        openAuthUrl: async () => {},
-        runOAuthCallbackServer: () => {
-          callbackStarted = true;
-          return Promise.resolve("should-not-run");
-        },
-      };
-      const program = new Command();
-      registerLoginCommand(program, dependencies);
+      const program = registerTestLoginCommand();
 
       await assertRejects(
         () =>
@@ -176,34 +77,25 @@ Deno.test("login command - rejects invalid API URL before starting callback serv
             "node",
             "takos",
             "login",
-            "--legacy-browser",
             "--api-url",
             "ftp://evil.example.com",
+            "--token",
+            "takpat_accounts_token",
           ]),
         CliCommandExit,
       );
 
-      assertEquals(callbackStarted, false);
       assertEquals(readStoredConfig(configDir), {});
     } finally {
       logSpy.restore();
     }
   }));
 
-Deno.test("login command - stores Takosumi Accounts bearer token without callback server", async () =>
+Deno.test("login command - stores Takosumi Accounts bearer token", async () =>
   await withIsolatedConfig(async (configDir) => {
     const logSpy = stub(console, "log");
     try {
-      let callbackStarted = false;
-      const dependencies: LoginCommandDependencies = {
-        openAuthUrl: async () => {},
-        runOAuthCallbackServer: () => {
-          callbackStarted = true;
-          return Promise.resolve("should-not-run");
-        },
-      };
-      const program = new Command();
-      registerLoginCommand(program, dependencies);
+      const program = registerTestLoginCommand();
 
       await program.parseAsync([
         "node",
@@ -215,7 +107,6 @@ Deno.test("login command - stores Takosumi Accounts bearer token without callbac
         "takpat_accounts_token",
       ]);
 
-      assertEquals(callbackStarted, false);
       const storedConfig = readStoredConfig(configDir);
       assertEquals(storedConfig.token, "takpat_accounts_token");
       assertEquals(storedConfig.apiUrl, "https://api.takos.jp");
@@ -248,16 +139,7 @@ Deno.test("login command - creates and stores a Takosumi Accounts PAT", async ()
     });
     const logSpy = stub(console, "log");
     try {
-      let callbackStarted = false;
-      const dependencies: LoginCommandDependencies = {
-        openAuthUrl: async () => {},
-        runOAuthCallbackServer: () => {
-          callbackStarted = true;
-          return Promise.resolve("should-not-run");
-        },
-      };
-      const program = new Command();
-      registerLoginCommand(program, dependencies);
+      const program = registerTestLoginCommand();
 
       await program.parseAsync([
         "node",
@@ -276,7 +158,6 @@ Deno.test("login command - creates and stores a Takosumi Accounts PAT", async ()
         "read,write",
       ]);
 
-      assertEquals(callbackStarted, false);
       assertEquals(fetchCalls.length, 1);
       assertEquals(
         fetchCalls[0].input,
@@ -319,7 +200,7 @@ Deno.test("login command - creates PAT using Accounts env defaults", async () =>
     });
     const logSpy = stub(console, "log");
     try {
-      const { program } = registerTestLoginCommand("should-not-run");
+      const program = registerTestLoginCommand();
 
       await program.parseAsync(["node", "takos", "login", "--create-pat"]);
 
@@ -348,7 +229,7 @@ Deno.test("login command - rejects invalid PAT scopes before Accounts request", 
     });
     const logSpy = stub(console, "log");
     try {
-      const { program } = registerTestLoginCommand("should-not-run");
+      const program = registerTestLoginCommand();
 
       await assertRejects(
         () =>
@@ -386,7 +267,7 @@ Deno.test("login command - does not store credentials when Accounts PAT create f
       ));
     const logSpy = stub(console, "log");
     try {
-      const { program } = registerTestLoginCommand("should-not-run");
+      const program = registerTestLoginCommand();
 
       await assertRejects(
         () =>
@@ -414,16 +295,7 @@ Deno.test("login command - rejects retired app-local PAT prefixes", async () =>
   await withIsolatedConfig(async (configDir) => {
     const logSpy = stub(console, "log");
     try {
-      let callbackStarted = false;
-      const dependencies: LoginCommandDependencies = {
-        openAuthUrl: async () => {},
-        runOAuthCallbackServer: () => {
-          callbackStarted = true;
-          return Promise.resolve("should-not-run");
-        },
-      };
-      const program = new Command();
-      registerLoginCommand(program, dependencies);
+      const program = registerTestLoginCommand();
 
       await assertRejects(
         () =>
@@ -437,59 +309,38 @@ Deno.test("login command - rejects retired app-local PAT prefixes", async () =>
         CliCommandExit,
       );
 
-      assertEquals(callbackStarted, false);
       assertEquals(readStoredConfig(configDir), {});
     } finally {
       logSpy.restore();
     }
   }));
 
-Deno.test("login command - requires explicit token or legacy browser mode", async () =>
+Deno.test("login command - requires explicit token or Accounts PAT creation", async () =>
   await withIsolatedConfig(async (configDir) => {
     const logSpy = stub(console, "log");
     try {
-      let callbackStarted = false;
-      const dependencies: LoginCommandDependencies = {
-        openAuthUrl: async () => {},
-        runOAuthCallbackServer: () => {
-          callbackStarted = true;
-          return Promise.resolve("should-not-run");
-        },
-      };
-      const program = new Command();
-      registerLoginCommand(program, dependencies);
+      const program = registerTestLoginCommand();
 
       await assertRejects(
         () => program.parseAsync(["node", "takos", "login"]),
         CliCommandExit,
       );
 
-      assertEquals(callbackStarted, false);
       assertEquals(readStoredConfig(configDir), {});
     } finally {
       logSpy.restore();
     }
   }));
 
-Deno.test("login command - returns without callback server in container mode", async () =>
+Deno.test("login command - returns without storing credentials in container mode", async () =>
   await withIsolatedConfig(async (configDir) => {
     Deno.env.set("TAKOS_TOKEN", "container-token");
     const logSpy = stub(console, "log");
     try {
-      let callbackStarted = false;
-      const dependencies: LoginCommandDependencies = {
-        openAuthUrl: async () => {},
-        runOAuthCallbackServer: () => {
-          callbackStarted = true;
-          return Promise.resolve("should-not-run");
-        },
-      };
-      const program = new Command();
-      registerLoginCommand(program, dependencies);
+      const program = registerTestLoginCommand();
 
       await program.parseAsync(["node", "takos", "login"]);
 
-      assertEquals(callbackStarted, false);
       assertEquals(readStoredConfig(configDir), {});
     } finally {
       logSpy.restore();

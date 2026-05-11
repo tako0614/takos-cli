@@ -1,22 +1,5 @@
 import type { Command } from "commander";
-import { blue, bold, green, red, yellow } from "@std/fmt/colors";
-import { randomBytes } from "node:crypto";
-
-async function openUrl(url: string): Promise<void> {
-  const cmd = Deno.build.os === "darwin"
-    ? "open"
-    : Deno.build.os === "windows"
-    ? "cmd"
-    : "xdg-open";
-  const args = Deno.build.os === "windows" ? ["/c", "start", url] : [url];
-  const command = new Deno.Command(cmd, {
-    args,
-    stdout: "null",
-    stderr: "null",
-  });
-  const child = command.spawn();
-  await child.status;
-}
+import { bold, green, red, yellow } from "@std/fmt/colors";
 import {
   clearCredentials,
   getConfig,
@@ -27,10 +10,6 @@ import {
 } from "../lib/config.ts";
 import { api } from "../lib/api.ts";
 import { cliExit } from "../lib/command-exit.ts";
-import {
-  type OAuthCallbackFailureCode,
-  runOAuthCallbackServer,
-} from "./login-oauth-callback.ts";
 
 const ACCOUNTS_TOKEN_PATH = "/v1/account/tokens";
 const ACCOUNTS_PAT_SCOPES = ["read", "write", "admin"] as const;
@@ -42,18 +21,6 @@ type AccountsTokenCreateResponse = {
   tokenRecord?: unknown;
   error?: unknown;
 };
-
-/**
- * Generate a cryptographically secure state parameter for CSRF protection
- */
-function generateOAuthState(): string {
-  return randomBytes(32).toString("hex");
-}
-
-export interface LoginCommandDependencies {
-  openAuthUrl?: (authUrl: string) => Promise<void>;
-  runOAuthCallbackServer?: typeof runOAuthCallbackServer;
-}
 
 function validateAccountsBearerToken(token: string): string | null {
   const normalized = token.trim();
@@ -147,14 +114,7 @@ async function createAccountsPat(input: {
   return body.token.trim();
 }
 
-export function registerLoginCommand(
-  program: Command,
-  dependencies: LoginCommandDependencies = {},
-): void {
-  const openAuthUrl = dependencies.openAuthUrl ?? openUrl;
-  const runCallbackServer = dependencies.runOAuthCallbackServer ??
-    runOAuthCallbackServer;
-
+export function registerLoginCommand(program: Command): void {
   program
     .command("login")
     .description("Authenticate with takos platform")
@@ -177,10 +137,6 @@ export function registerLoginCommand(
       "--pat-scopes <scopes>",
       "Comma-separated PAT scopes: read,write,admin (default: read,write)",
     )
-    .option(
-      "--legacy-browser",
-      "Use retired Takos /auth/cli browser login for compatibility deployments",
-    )
     .action(async (options: {
       apiUrl?: string;
       token?: string;
@@ -189,7 +145,6 @@ export function registerLoginCommand(
       sessionToken?: string;
       patName?: string;
       patScopes?: string;
-      legacyBrowser?: boolean;
     }) => {
       if (isContainerMode()) {
         console.log(
@@ -275,38 +230,12 @@ export function registerLoginCommand(
         return;
       }
 
-      if (!options.legacyBrowser) {
-        console.log(
-          red(
-            "Browser login through Takos /auth/cli is retired. Create a Takosumi Accounts PAT and run `takos login --token <takpat_...>` or set TAKOS_TOKEN.",
-          ),
-        );
-        cliExit(1);
-      }
-
-      console.log(blue("Opening browser for authentication..."));
-
-      // Generate state parameter for CSRF protection
-      const oauthState = generateOAuthState();
-      let callbackFailureCode: OAuthCallbackFailureCode | null = null;
-
-      const token = await runCallbackServer({
-        apiUrl,
-        oauthState,
-        openAuthUrl,
-        onFailure: (code) => {
-          callbackFailureCode = code;
-        },
-      });
-
-      if (callbackFailureCode !== null || token === null) {
-        cliExit(1);
-      }
-
-      saveToken(token);
-      if (options.apiUrl) {
-        saveApiUrl(apiUrl);
-      }
+      console.log(
+        red(
+          "Takos CLI browser login is retired. Create a Takosumi Accounts PAT and run `takos login --token <takpat_...>`, or use `takos login --create-pat` with an Accounts session bearer.",
+        ),
+      );
+      cliExit(1);
     });
 
   program

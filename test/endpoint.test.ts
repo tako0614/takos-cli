@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { assertEquals, assertRejects } from "@std/assert";
 import { assertSpyCallArgs, assertSpyCalls, stub } from "@std/testing/mock";
+import { green, red } from "@std/fmt/colors";
 import {
   registerEndpointCommand,
   resolveEndpointTarget,
@@ -81,7 +82,9 @@ Deno.test("endpoint command - updates endpoint to test preset", async () =>
       await program.parseAsync(["node", "takos", "endpoint", "use", "test"]);
 
       assertEquals(readStoredApiUrl(configDir), "https://test.takos.jp");
-      assertSpyCallArgs(logSpy, 0, ["Endpoint updated: https://test.takos.jp"]);
+      assertSpyCallArgs(logSpy, 0, [
+        green("Endpoint updated: https://test.takos.jp"),
+      ]);
     } finally {
       logSpy.restore();
     }
@@ -97,7 +100,9 @@ Deno.test("endpoint command - updates endpoint to prod preset", async () =>
       await program.parseAsync(["node", "takos", "endpoint", "use", "prod"]);
 
       assertEquals(readStoredApiUrl(configDir), "https://takos.jp");
-      assertSpyCallArgs(logSpy, 0, ["Endpoint updated: https://takos.jp"]);
+      assertSpyCallArgs(logSpy, 0, [
+        green("Endpoint updated: https://takos.jp"),
+      ]);
     } finally {
       logSpy.restore();
     }
@@ -136,7 +141,9 @@ Deno.test("endpoint command - fails when running in container mode", async () =>
         CliCommandExit,
       );
       assertSpyCallArgs(logSpy, 0, [
-        "Cannot update endpoint in container mode. Use TAKOS_API_URL for this session.",
+        red(
+          "Cannot update endpoint in container mode. Use TAKOS_API_URL for this session.",
+        ),
       ]);
       assertSpyCalls(logSpy, 1);
     } finally {

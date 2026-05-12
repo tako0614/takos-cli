@@ -225,6 +225,78 @@ Deno.test("install command - requires legacy deploy opt-in before catalog lookup
   }
 });
 
+Deno.test("install command - rejects AppInstallation mode on legacy command", async () => {
+  const fetchStub = stub(
+    globalThis,
+    "fetch",
+    () => Promise.reject(new Error("fetch should not be called")),
+  );
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    const program = createProgram();
+    await assertRejects(
+      () =>
+        program.parseAsync([
+          "node",
+          "takos",
+          "install",
+          "acme/demo",
+          "--mode",
+          "shared-cell",
+        ], { from: "node" }),
+      CliCommandExit,
+    );
+
+    assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "takosumi-git install --mode shared-cell",
+    );
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
+Deno.test("install command - validates AppInstallation runtime mode values", async () => {
+  const fetchStub = stub(
+    globalThis,
+    "fetch",
+    () => Promise.reject(new Error("fetch should not be called")),
+  );
+  const logSpy = stub(console, "log", () => {});
+  setAuthEnv();
+
+  try {
+    const program = createProgram();
+    await assertRejects(
+      () =>
+        program.parseAsync([
+          "node",
+          "takos",
+          "install",
+          "acme/demo",
+          "--mode",
+          "shared",
+        ], { from: "node" }),
+      CliCommandExit,
+    );
+
+    assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "--mode must be one of shared-cell|dedicated|self-hosted",
+    );
+  } finally {
+    fetchStub.restore();
+    logSpy.restore();
+    clearAuthEnv();
+  }
+});
+
 Deno.test("install command - rejects unknown packageRef formats before any API call", async () => {
   const fetchStub = stub(
     globalThis,

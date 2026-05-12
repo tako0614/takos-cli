@@ -116,6 +116,8 @@ compatibility path です。新規 AppInstallation install は `takosumi-git ins
 `shared-cell` を使います。 `takos install owner/repo` は legacy catalog deploy
 sugar として残るだけで、 `--legacy-deploy` を渡したときだけ catalog item を
 repository source に解決して compatibility deployment pipeline に渡します。
+`takos install --mode ...` は runtime mode の誤用を避けるために認識した上で
+拒否し、 `takosumi-git install --mode ...` へ誘導します。
 `takos deploy --preview` は remote state を変更しない in-memory
 preview、`takos deploy --resolve-only` は Deployment record を作成し、後続の
 `takos apply` 待ちにします。

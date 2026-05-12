@@ -35,11 +35,31 @@ type InstallCommandOptions = {
   group?: string;
   env?: string;
   space?: string;
+  mode?: string;
   plan?: boolean;
   autoApprove?: boolean;
   json?: boolean;
   legacyDeploy?: boolean;
 };
+
+const INSTALL_RUNTIME_MODES = [
+  "shared-cell",
+  "dedicated",
+  "self-hosted",
+] as const;
+
+function parseInstallRuntimeMode(
+  value: string,
+): typeof INSTALL_RUNTIME_MODES[number] {
+  if (
+    (INSTALL_RUNTIME_MODES as readonly string[]).includes(value)
+  ) {
+    return value as typeof INSTALL_RUNTIME_MODES[number];
+  }
+  throw new Error(
+    `--mode must be one of ${INSTALL_RUNTIME_MODES.join("|")}`,
+  );
+}
 
 function parseOwnerRepo(input: string): { owner: string; repoName: string } {
   const [owner, repoName, ...rest] = input.split("/").map((value) =>
@@ -105,6 +125,25 @@ export async function runInstall(
     cliExit(1);
   }
 
+  let installMode: typeof INSTALL_RUNTIME_MODES[number] | undefined;
+  try {
+    installMode = options.mode
+      ? parseInstallRuntimeMode(options.mode)
+      : undefined;
+  } catch (error) {
+    console.log(red(error instanceof Error ? error.message : String(error)));
+    cliExit(1);
+  }
+
+  if (installMode) {
+    console.log(
+      red(
+        `takos install --mode is an AppInstallation runtime-mode flag. Use \`takosumi-git install --mode ${installMode}\` or Takosumi Accounts install APIs; the legacy deploy compatibility path has no runtime mode.`,
+      ),
+    );
+    cliExit(1);
+  }
+
   if (!options.legacyDeploy) {
     console.log(
       red(
@@ -164,6 +203,10 @@ export function registerInstallCommand(program: Command): void {
     )
     .option("--env <env>", "Target environment", "staging")
     .option("--space <id>", "Target space ID")
+    .option(
+      "--mode <mode>",
+      "AppInstallation runtime mode: shared-cell | dedicated | self-hosted",
+    )
     .option("--plan", "Dry-run preview without mutating remote state")
     .option("--auto-approve", "Skip interactive confirmation prompt")
     .option("--json", "Machine-readable output")

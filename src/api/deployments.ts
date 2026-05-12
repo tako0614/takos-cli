@@ -237,7 +237,7 @@ export function approveDeployment(
     `/api/public/v1/deployments/${encodeURIComponent(deploymentId)}/approve`,
     {
       method: "POST",
-      body: body as Record<string, unknown>,
+      body,
       headers: withSpace(spaceId),
     },
   );
@@ -257,7 +257,7 @@ export function rollbackGroup(
     `/api/public/v1/groups/${encodeURIComponent(groupId)}/rollback`,
     {
       method: "POST",
-      body: body as Record<string, unknown>,
+      body,
       headers: withSpace(spaceId),
       timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     },

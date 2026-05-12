@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
-import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { stub } from "jsr:@std/testing/mock";
+import { assertEquals, assertRejects } from "@std/assert";
+import { stub } from "@std/testing/mock";
 import { registerLoginCommand } from "../src/commands/login.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 

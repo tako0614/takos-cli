@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { findServiceInSpace } from "../src/lib/platform-surface.ts";
 
 const MANAGED_ENV_VARS = [

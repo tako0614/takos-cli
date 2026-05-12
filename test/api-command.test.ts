@@ -8,11 +8,7 @@ import {
 } from "../src/commands/api-request.ts";
 import { createProgram } from "../src/program.ts";
 
-import {
-  assertEquals,
-  assertStringIncludes,
-  assertThrows,
-} from "jsr:@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 
 Deno.test("api command helpers - resolves task target against /api base and normalizes paths", () => {
   assertEquals(

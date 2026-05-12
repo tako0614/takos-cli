@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
-import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { assertSpyCallArgs, assertSpyCalls, stub } from "jsr:@std/testing/mock";
+import { assertEquals, assertRejects } from "@std/assert";
+import { assertSpyCallArgs, assertSpyCalls, stub } from "@std/testing/mock";
 import {
   registerEndpointCommand,
   resolveEndpointTarget,

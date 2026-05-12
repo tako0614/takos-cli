@@ -2,12 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Command } from "commander";
-import {
-  assertEquals,
-  assertRejects,
-  assertStringIncludes,
-} from "jsr:@std/assert";
-import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerGroupCommand } from "../src/commands/group/index.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 

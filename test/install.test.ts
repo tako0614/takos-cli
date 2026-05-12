@@ -1,10 +1,6 @@
 import { Command } from "commander";
-import {
-  assertEquals,
-  assertRejects,
-  assertStringIncludes,
-} from "jsr:@std/assert";
-import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerInstallCommand } from "../src/commands/install.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 

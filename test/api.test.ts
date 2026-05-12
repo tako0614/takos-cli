@@ -1,5 +1,5 @@
-import { assert, assertEquals } from "jsr:@std/assert";
-import { stub } from "jsr:@std/testing/mock";
+import { assert, assertEquals } from "@std/assert";
+import { stub } from "@std/testing/mock";
 import { api } from "../src/lib/api.ts";
 
 const MANAGED_ENV_VARS = [

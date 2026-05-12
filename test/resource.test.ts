@@ -1,5 +1,5 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
-import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, stub } from "@std/testing/mock";
 import { createProgram } from "../src/program.ts";
 import { resolveResourceType } from "../src/commands/resource-core.ts";
 

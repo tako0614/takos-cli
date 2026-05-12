@@ -7,7 +7,8 @@ import {
   validateApiUrl,
 } from "../src/lib/config.ts";
 
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
+import process from "node:process";
 
 const MANAGED_ENV_VARS = [
   "TAKOS_TIMEOUT_MS",

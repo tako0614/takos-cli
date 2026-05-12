@@ -1,23 +1,9 @@
-// Mock config and api dependencies before importing modules
 import {
   assertEquals,
   assertNotEquals,
   assertStringIncludes,
-} from "jsr:@std/assert";
+} from "@std/assert";
 
-const mocks = {
-  getConfig: ((..._args: any[]) => undefined) as any,
-  getApiRequestTimeoutMs: ((..._args: any[]) => undefined) as any,
-  createAuthHeaders: ((..._args: any[]) => undefined) as any,
-  cliExit: (code?: number) => {
-    throw new Error(`cliExit:${code ?? 0}`);
-  },
-};
-
-// [Deno] vi.mock removed - manually stub imports from '../src/lib/config.ts'
-// [Deno] vi.mock removed - manually stub imports from '../src/lib/api.ts'
-// [Deno] vi.mock removed - manually stub imports from '../src/lib/command-exit.ts'
-// Test only the pure functions that can be imported independently
 import {
   parseSseEventBlock,
   toWebSocketUrl,

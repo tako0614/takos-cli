@@ -7,7 +7,8 @@ import {
 } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertEquals, assertNotEquals } from "jsr:@std/assert";
+import { assertEquals, assertNotEquals } from "@std/assert";
+import process from "node:process";
 import {
   findSessionFile,
   isWindows,

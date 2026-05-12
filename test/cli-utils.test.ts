@@ -1,5 +1,5 @@
-import { assertEquals } from "jsr:@std/assert";
-import { stub } from "jsr:@std/testing/mock";
+import { assertEquals } from "@std/assert";
+import { stub } from "@std/testing/mock";
 import { resolveAccountId, resolveApiToken } from "../src/lib/cli-utils.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 

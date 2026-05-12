@@ -4,7 +4,7 @@ import {
   isCliCommandExit,
 } from "../src/lib/command-exit.ts";
 
-import { assert, assertEquals } from "jsr:@std/assert";
+import { assert, assertEquals } from "@std/assert";
 
 Deno.test("command exit helper - throws typed exit error with requested code", () => {
   try {

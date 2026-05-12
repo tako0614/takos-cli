@@ -18,7 +18,7 @@ import {
   assertEquals,
   assertStringIncludes,
   assertThrows,
-} from "jsr:@std/assert";
+} from "@std/assert";
 
 Deno.test("parseKeyValue - parses simple key=value", () => {
   assertEquals(parseKeyValue("foo=bar"), { key: "foo", value: "bar" });

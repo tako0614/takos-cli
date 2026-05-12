@@ -8,7 +8,7 @@ import {
 // isLocalhostAddress
 // ---------------------------------------------------------------------------
 
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 
 Deno.test('isLocalhostAddress - recognizes "localhost"', () => {
   assertEquals(isLocalhostAddress("localhost"), true);

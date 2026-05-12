@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { inferApplySourceProjection } from "../src/lib/git-provenance.ts";
 
 async function runGit(cwd: string, args: string[]): Promise<string> {

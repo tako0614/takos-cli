@@ -2,12 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { Command } from "commander";
-import {
-  assertEquals,
-  assertRejects,
-  assertStringIncludes,
-} from "jsr:@std/assert";
-import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerDeployCommand } from "../src/commands/deploy.ts";
 import { registerRollbackCommand } from "../src/commands/rollback.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";

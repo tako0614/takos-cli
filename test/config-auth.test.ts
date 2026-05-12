@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertEquals, assertThrows } from "jsr:@std/assert";
-import { assertSpyCallArgs, stub } from "jsr:@std/testing/mock";
+import { assertEquals, assertThrows } from "@std/assert";
+import { assertSpyCallArgs, stub } from "@std/testing/mock";
 import {
   DEFAULT_API_URL,
   getConfig,
@@ -10,6 +10,7 @@ import {
   isContainerMode,
 } from "../src/lib/config-auth.ts";
 import { logWarning } from "../src/lib/cli-log.ts";
+import process from "node:process";
 
 const MANAGED_ENV_VARS = [
   "TAKOS_SESSION_ID",

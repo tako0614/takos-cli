@@ -106,7 +106,7 @@ function validateAccountsBearerToken(token: string): string | null {
     }
   }
   if (token.startsWith("tak_pat_") || token.startsWith("tak_oat_")) {
-    return "legacy Takos app-local tokens are no longer accepted";
+    return "Takos app-local tokens are no longer accepted";
   }
   return null;
 }

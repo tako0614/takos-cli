@@ -7,7 +7,7 @@
  *
  * File-backed state is now explicit offline mode.
  *
- * Legacy note: these state CRUD helpers still target the old `/api/groups*`
+ * Retired-path note: these state CRUD helpers still target the old `/api/groups*`
  * state endpoints. Current `takos group` online commands use the space-scoped
  * group API directly; keep these helpers only for compatibility callers until
  * a space-scoped state CRUD contract exists.

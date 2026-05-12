@@ -125,14 +125,14 @@ function parseOptionalAuth(
   return { bearer: { secretRef } };
 }
 
-function legacyAuthSecretRef(
+function retiredAuthSecretRef(
   spec: Record<string, unknown> | undefined,
 ): string | undefined {
   const value = spec?.authSecretRef;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function specWithoutLegacyAuth(
+function specWithoutRetiredAuth(
   spec: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (!spec || spec.authSecretRef == null) return spec;
@@ -244,8 +244,8 @@ export function parsePublicationEntry(
     );
   }
   const outputs = parsePublicationOutputs(prefix, record.outputs);
-  const usesLegacyRoute = Object.values(outputs).some((output) => output.route);
-  if (usesLegacyRoute && !publisher) {
+  const usesRouteAlias = Object.values(outputs).some((output) => output.route);
+  if (usesRouteAlias && !publisher) {
     throw new Error(`${prefix}.publisher is required when outputs use route`);
   }
   const title = asString(record.title, `${prefix}.title`);
@@ -255,14 +255,14 @@ export function parsePublicationEntry(
   }
   const spec = parseOptionalSpec(prefix, record.spec);
   const auth = parseOptionalAuth(prefix, record.auth);
-  const authSecretRef = legacyAuthSecretRef(spec);
+  const authSecretRef = retiredAuthSecretRef(spec);
   if (auth && authSecretRef) {
     throw new Error(`${prefix} must not combine auth and spec.authSecretRef`);
   }
   const normalizedAuth = auth ??
     (authSecretRef ? { bearer: { secretRef: authSecretRef } } : undefined);
   const normalizedDisplay = display ?? (title ? { title } : undefined);
-  const normalizedSpec = specWithoutLegacyAuth(spec);
+  const normalizedSpec = specWithoutRetiredAuth(spec);
 
   if (type === FILE_HANDLER_PUBLICATION_TYPE) {
     validateFileHandlerPublication(prefix, outputs, normalizedSpec);

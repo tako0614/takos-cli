@@ -23,7 +23,7 @@ async function collectScannedFiles(dir: string): Promise<string[]> {
   return files;
 }
 
-Deno.test("contract boundary - CLI does not reference legacy control vendor", async () => {
+Deno.test("contract boundary - CLI does not reference retired control vendor", async () => {
   const forbidden = ["takos", "control"].join("-");
   const offenders: string[] = [];
 

@@ -304,7 +304,7 @@ Deno.test("login command - rejects retired app-local PAT prefixes", async () =>
             "takos",
             "login",
             "--token",
-            "tak_pat_legacy",
+            "tak_pat_retired",
           ]),
         CliCommandExit,
       );

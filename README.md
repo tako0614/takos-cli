@@ -98,30 +98,26 @@ takos endpoint show
 deploy manifest ベースの deploy flow:
 
 ```bash
-takos deploy --manifest .takosumi/manifest.yml --preview --group GROUP_NAME
-takos deploy --manifest .takosumi/manifest.yml --resolve-only --group GROUP_NAME
-takos apply DEPLOYMENT_RECORD_ID
 takos deploy --manifest .takosumi/manifest.yml --env staging --group GROUP_NAME
 takos deploy --manifest .takosumi/manifest.yml --env production --group GROUP_NAME
-takos rollback GROUP_NAME
 ```
 
 `takos deploy` の local manifest path は `--manifest` で明示します。これは
-digest-pinned image manifest 向けです。 worker bundle や workflow/build artifact
-の解決は `takosumi-git init` / `takosumi-git push` 側で行います。
-`takos deploy URL --ref ...` は `--legacy-repo-source` を渡したときだけ残る
-compatibility path です。新規 AppInstallation install は `takosumi-git install`
-または Takosumi Accounts install API を使います。runtime mode は
-`takosumi-git install --mode shared-cell|dedicated|self-hosted` で選択し、
-省略時は `.takosumi/app.yml` の `runtime.modes` 先頭値、Takos-first app では
-`shared-cell` を使います。 `takos install owner/repo` は legacy catalog deploy
-sugar として残るだけで、 `--legacy-deploy` を渡したときだけ catalog item を
-repository source に解決して compatibility deployment pipeline に渡します。
-`takos install --mode ...` は runtime mode の誤用を避けるために認識した上で
-拒否し、 `takosumi-git install --mode ...` へ誘導します。
-`takos deploy --preview` は remote state を変更しない in-memory
-preview、`takos deploy --resolve-only` は Deployment record を作成し、後続の
-`takos apply` 待ちにします。
+takosumi Manifest envelope (`apiVersion: "1.0"`, `kind: Manifest`) を GitOps
+deploy intent として送る入口です。 worker bundle や workflow/build artifact の
+解決は `takosumi-git init` / `takosumi-git push` 側で行います。 AppInstallation
+install は `takosumi-git install` または Takosumi Accounts install API
+を使います。runtime mode は
+`takosumi-git install --mode
+shared-cell|dedicated|self-hosted`
+で選択し、省略時は `.takosumi/app.yml` の `runtime.modes` 先頭値、Takos-first
+app では `shared-cell` を使います。 `takos install owner/repo` は current
+install path ではなく、Takosumi Accounts / takosumi-git の install flow
+を使います。 `takos install --mode ...` は runtime mode
+の誤用を避けるために認識した上で 拒否し、 `takosumi-git install --mode ...`
+へ誘導します。 `takos deploy --preview` / `--resolve-only` は current GitOps
+deploy intent では 使いません。install preview は `takosumi-git install preview`
+を使います。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。
@@ -130,7 +126,7 @@ preview、`takos deploy --resolve-only` は Deployment record を作成し、後
 
 - この repo は `takos/` space への hard dependency を避けるため、CLI が読む app
   manifest contract を `src/lib/app-manifest-contract/` に持ちます。
-- broader migration が終わるまで、runtime image 互換のために CLI source は
+- standalone packaging が完了するまで、runtime image 互換のために CLI source は
   ecosystem root の `takos-cli/` checkout から runtime image build context
   に渡します。
 - upstream の manifest schema が変わったら、この repo の CLI-local contract も

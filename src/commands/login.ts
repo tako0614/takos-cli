@@ -30,7 +30,7 @@ function validateAccountsBearerToken(token: string): string | null {
     return "token must not contain whitespace or control characters";
   }
   if (normalized.startsWith("tak_pat_") || normalized.startsWith("tak_oat_")) {
-    return "legacy Takos app-local tokens are no longer accepted";
+    return "Takos app-local tokens are no longer accepted";
   }
   return null;
 }

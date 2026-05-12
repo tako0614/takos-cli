@@ -1,7 +1,7 @@
 /**
  * @deprecated v2 deployment-snapshot client.
  *
- * The legacy v2 deploy paths and the snapshot record were removed by the
+ * The v2 deploy paths and the snapshot record were removed by the
  * Core v3 unification. Deployment lifecycle now flows through the public v3
  * deployments family rooted at `/api/public/v1/deployments`.
  *

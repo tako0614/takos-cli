@@ -1,13 +1,11 @@
 import type { Command } from "commander";
 import { cyan, dim, red } from "@std/fmt/colors";
+import YAML from "yaml";
 import { confirmPrompt, printJson, resolveSpaceId } from "../lib/cli-utils.ts";
 import { CliCommandExit, cliExit } from "../lib/command-exit.ts";
-import { type AppManifest, loadAppManifest } from "../lib/app-manifest.ts";
 import {
   createDeployment,
   type CreateDeploymentRequest,
-  type DeploymentMode,
-  type DeploymentSource,
 } from "../api/deployments.ts";
 import {
   formatExpansionSummary,
@@ -25,125 +23,70 @@ export type DeployCommandOptions = {
   resolveOnly?: boolean;
   autoApprove?: boolean;
   json?: boolean;
-  legacyRepoSource?: boolean;
 };
 
-const LOCAL_WORKER_DEPLOY_GUIDANCE =
-  "Local Takos CLI deploy no longer builds or collects worker artifacts. " +
-  "Use takosumi-git to resolve workflow/build artifacts upstream " +
-  "(takosumi-git init, then takosumi-git push) and submit a digest-pinned " +
-  "image manifest to Takos.";
+type KernelManifest = Record<string, unknown>;
 
-const LEGACY_REPOSITORY_SOURCE_MESSAGE =
-  "Repository URL deploy is legacy compatibility sugar. Use takosumi-git " +
-  "push for source-driven deploys, or pass --legacy-repo-source to call the " +
-  "compatibility deployment API intentionally.";
-
-function validateRepositoryUrl(
-  repositoryUrl: string | undefined,
-): string | null {
-  const trimmed = repositoryUrl?.trim();
-  if (!trimmed) return null;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    console.log(
-      red("Invalid repository URL: expected a canonical https:// URL."),
-    );
-    cliExit(1);
-  }
-
-  if (parsed.protocol !== "https:") {
-    console.log(
-      red("Invalid repository URL: expected a canonical https:// URL."),
-    );
-    cliExit(1);
-  }
-
-  if (parsed.username || parsed.password) {
-    console.log(red("Invalid repository URL: credentials are not allowed."));
-    cliExit(1);
-  }
-
-  if (parsed.search || parsed.hash) {
-    console.log(
-      red("Invalid repository URL: query and hash are not allowed."),
-    );
-    cliExit(1);
-  }
-
-  const pathSegments = parsed.pathname.split("/").filter(Boolean);
-  if (pathSegments.length < 2) {
-    console.log(
-      red("Invalid repository URL: expected an owner/repo-like path."),
-    );
-    cliExit(1);
-  }
-
-  return trimmed;
-}
-
-async function loadLocalManifest(
+async function loadKernelManifest(
   manifestOption: string | undefined,
-): Promise<{ manifest: AppManifest; manifestPath: string }> {
+): Promise<{ manifest: KernelManifest; manifestPath: string }> {
   if (!manifestOption?.trim()) {
     console.log(red("Local deploys require --manifest <path>."));
     cliExit(1);
   }
   const manifestPath = manifestOption.trim();
 
-  let manifest: AppManifest;
+  let manifest: unknown;
   try {
-    manifest = await loadAppManifest(manifestPath);
+    const raw = await Deno.readTextFile(manifestPath);
+    manifest = YAML.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.log(red(`Invalid manifest: ${message}`));
     cliExit(1);
   }
 
+  if (!isKernelManifest(manifest)) {
+    console.log(
+      red(
+        'Deploy manifest must be a takosumi Manifest envelope (`apiVersion: "1.0"`, `kind: Manifest`, `resources: []`).',
+      ),
+    );
+    cliExit(1);
+  }
+
   return { manifest, manifestPath };
 }
 
-function assertLocalManifestDeployableByTakosCli(manifest: AppManifest): void {
-  const workerNames = Object.entries(manifest.compute ?? {})
-    .filter(([, compute]) => compute.kind === "worker")
-    .map(([name]) => name);
-  if (workerNames.length === 0) return;
-
-  console.log(
-    red(
-      `Local manifest contains worker compute (${workerNames.join(", ")}). ` +
-        LOCAL_WORKER_DEPLOY_GUIDANCE,
-    ),
-  );
-  cliExit(1);
+function isKernelManifest(value: unknown): value is KernelManifest {
+  return Boolean(value) &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>).apiVersion === "1.0" &&
+    (value as Record<string, unknown>).kind === "Manifest" &&
+    Array.isArray((value as Record<string, unknown>).resources);
 }
 
-function pickMode(options: DeployCommandOptions): DeploymentMode {
+function pickMode(options: DeployCommandOptions): "apply" {
   if (options.preview && options.resolveOnly) {
     console.log(
       red("--preview and --resolve-only cannot be combined."),
     );
     cliExit(1);
   }
-  if (options.preview) return "preview";
-  if (options.resolveOnly) return "resolve";
+  if (options.preview || options.resolveOnly) {
+    console.log(
+      red(
+        "takos deploy only writes GitOps deploy intents in apply mode. Use takosumi-git install preview for install previews.",
+      ),
+    );
+    cliExit(1);
+  }
   return "apply";
 }
 
-function describeMode(mode: DeploymentMode): string {
-  switch (mode) {
-    case "preview":
-      return "Preview (no record persisted)";
-    case "resolve":
-      return "Resolve (Deployment record, apply pending)";
-    case "apply":
-      return "Resolve + Apply";
-    default:
-      return mode;
-  }
+function describeMode(): string {
+  return "GitOps deploy intent";
 }
 
 export async function runDeploy(
@@ -168,61 +111,35 @@ export async function runDeploy(
     cliExit(1);
   }
 
-  if (usingRepositoryUrl && !options.legacyRepoSource) {
-    console.log(red(LEGACY_REPOSITORY_SOURCE_MESSAGE));
-    cliExit(1);
-  }
-
-  if (!usingRepositoryUrl && options.legacyRepoSource) {
-    console.log(red("--legacy-repo-source requires a repository URL."));
-    cliExit(1);
-  }
-
-  const normalizedRepositoryUrl = validateRepositoryUrl(repositoryUrl);
-
   const spaceId = resolveSpaceId(options.space);
   const groupName = options.group?.trim();
 
-  let source: DeploymentSource;
-  let manifest: AppManifest | undefined;
   let manifestPath: string | undefined;
   let inlineManifest: unknown;
 
   if (usingRepositoryUrl) {
-    source = {
-      kind: "git",
-      repository_url: normalizedRepositoryUrl!,
-      ...(options.ref ? { ref: options.ref } : {}),
-      ...(options.refType ? { ref_type: options.refType } : {}),
-    };
+    console.log(
+      red(
+        "Repository URL deploy is not a current Takos CLI entry point. Use `takosumi-git install` for AppInstallation lifecycle or `takosumi-git push` for source-driven deploys.",
+      ),
+    );
+    cliExit(1);
   } else {
-    const loaded = await loadLocalManifest(options.manifest);
-    manifest = loaded.manifest;
+    const loaded = await loadKernelManifest(options.manifest);
     manifestPath = loaded.manifestPath;
-    inlineManifest = manifest;
-    assertLocalManifestDeployableByTakosCli(manifest);
-
-    source = {
-      kind: "inline",
-      artifacts: [],
-    };
+    inlineManifest = loaded.manifest;
   }
 
   const requestBody: CreateDeploymentRequest = {
     mode,
     env,
-    source,
     ...(inlineManifest ? { manifest: inlineManifest } : {}),
     ...(groupName ? { group: groupName } : {}),
   };
 
   // ── Confirmation prompt (apply mode only) ─────────────────────────
-  if (
-    mode === "apply" && !options.autoApprove && !options.json
-  ) {
-    const label = usingRepositoryUrl
-      ? `repository ${normalizedRepositoryUrl}`
-      : `local deploy manifest ${manifestPath}`;
+  if (!options.autoApprove && !options.json) {
+    const label = `local deploy manifest ${manifestPath}`;
     if (!(await confirmPrompt(`Deploy ${label} to ${env}?`))) {
       console.log(dim("Deploy cancelled."));
       return;
@@ -231,16 +148,8 @@ export async function runDeploy(
 
   if (!options.json) {
     console.log("");
-    console.log(cyan(`Mode: ${describeMode(mode)}`));
+    console.log(cyan(`Mode: ${describeMode()}`));
     if (manifestPath) console.log(`  Manifest:    ${manifestPath}`);
-    if (usingRepositoryUrl) {
-      console.log(`  Repository:  ${normalizedRepositoryUrl}`);
-      if (options.ref) {
-        console.log(
-          `  Ref:         ${options.refType ?? "branch"} ${options.ref}`,
-        );
-      }
-    }
     console.log(`  Env:         ${env}`);
     if (groupName) console.log(`  Group:       ${groupName}`);
     console.log("");
@@ -254,46 +163,63 @@ export async function runDeploy(
 
   if (options.json) {
     printJson(response.data);
-    if (response.data.status === "failed") cliExit(1);
+    if ("status" in response.data && response.data.status === "failed") {
+      cliExit(1);
+    }
+    return;
+  }
+
+  if (isGitOpsAcceptedResponse(response.data)) {
+    console.log(cyan("Deploy intent accepted."));
+    console.log(`  ID:      ${response.data.intent.id}`);
+    console.log(`  Branch:  ${response.data.intent.branch}`);
+    console.log(`  Path:    ${response.data.intent.path}`);
+    if (response.data.intent.commit) {
+      console.log(`  Commit:  ${response.data.intent.commit}`);
+    }
     return;
   }
 
   printDeploymentHeader(response.data, {
-    title: mode === "preview"
-      ? "Preview"
-      : mode === "resolve"
-      ? "Resolved deployment"
-      : "Deployment",
+    title: "Deployment",
   });
 
-  if (mode === "resolve") {
-    console.log("");
-    console.log(
-      dim(
-        `Run \`takos apply ${response.data.deployment_id}\` to apply this deployment.`,
-      ),
-    );
-  }
-
-  if (mode === "preview") {
-    const summary = formatExpansionSummary(response.data.expansion_summary);
-    if (!summary) {
-      console.log(dim("(No expansion summary returned by server.)"));
-    }
+  const summary = formatExpansionSummary(response.data.expansion_summary);
+  if (!summary) {
+    console.log(dim("(No expansion summary returned by server.)"));
   }
 
   if (response.data.status === "failed") cliExit(1);
+}
+
+function isGitOpsAcceptedResponse(
+  value: unknown,
+): value is {
+  accepted: true;
+  mode: "gitops";
+  intent: { id: string; branch: string; path: string; commit?: string };
+} {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  const intent = record.intent;
+  return record.accepted === true &&
+    record.mode === "gitops" &&
+    Boolean(intent) &&
+    typeof intent === "object" &&
+    typeof (intent as Record<string, unknown>).id === "string" &&
+    typeof (intent as Record<string, unknown>).branch === "string" &&
+    typeof (intent as Record<string, unknown>).path === "string";
 }
 
 export function registerDeployCommand(program: Command): void {
   program
     .command("deploy")
     .description(
-      "Deploy an explicit local manifest (default: resolve + apply)",
+      "Write a GitOps deploy intent from an explicit local manifest",
     )
     .argument(
       "[repositoryUrl]",
-      "Legacy canonical HTTPS git repository URL (requires --legacy-repo-source)",
+      "Retired repository URL deploy source; use takosumi-git",
     )
     .option("--space <id>", "Target space ID")
     .option("--env <env>", "Target environment", "staging")
@@ -312,18 +238,14 @@ export function registerDeployCommand(program: Command): void {
     )
     .option(
       "--preview",
-      "In-memory preview only; no Deployment record is persisted",
+      "Not supported by Takos CLI GitOps deploy intent",
     )
     .option(
       "--resolve-only",
-      "Create a resolved Deployment but do not apply it; use `takos apply <id>` later",
+      "Not supported by Takos CLI GitOps deploy intent",
     )
     .option("--auto-approve", "Skip interactive confirmation prompt")
     .option("--json", "Machine-readable output")
-    .option(
-      "--legacy-repo-source",
-      "Use the legacy repository source compatibility path",
-    )
     .action(
       async (
         repositoryUrl: string | undefined,

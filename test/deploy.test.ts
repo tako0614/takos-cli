@@ -8,12 +8,16 @@ import { registerDeployCommand } from "../src/commands/deploy.ts";
 import { registerRollbackCommand } from "../src/commands/rollback.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 
-const localManifestYaml = `name: sample-app
-version: 1.0.0
-compute:
-  gateway:
-    image: ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333
-    port: 8080
+const localManifestYaml = `apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: sample-app
+resources:
+  - shape: web-service@v1
+    name: gateway
+    spec:
+      image: ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333
+      port: 8080
 `;
 
 async function withTempProject<T>(
@@ -21,9 +25,9 @@ async function withTempProject<T>(
 ): Promise<T> {
   const originalCwd = Deno.cwd();
   const projectDir = await Deno.makeTempDir({ prefix: "takos-deploy-" });
-  await fs.mkdir(path.join(projectDir, ".takos"), { recursive: true });
+  await fs.mkdir(path.join(projectDir, ".takosumi"), { recursive: true });
   await fs.writeFile(
-    path.join(projectDir, ".takos", "app.yml"),
+    path.join(projectDir, ".takosumi", "manifest.yml"),
     localManifestYaml,
     "utf8",
   );
@@ -36,54 +40,15 @@ async function withTempProject<T>(
   }
 }
 
-const deploymentResponse = {
-  deployment_id: "dep-1",
-  status: "applied",
-  conditions: [
-    { type: "Resolved", status: "true" },
-    { type: "Applied", status: "true" },
-  ],
-  expansion_summary: {
-    components: 1,
-    routes: 1,
-    bindings: 0,
-    resources: 0,
-    diff: { create: 1, update: 0, delete: 0, unchanged: 0 },
-  },
-  hostnames: ["demo.example.com"],
-  deployment: {
-    id: "dep-1",
-    group_id: "demo-group",
-    space_id: "space-1",
-    status: "applied",
-    hostnames: ["demo.example.com"],
-    created_at: "2026-04-01T00:00:00.000Z",
-    applied_at: "2026-04-01T00:00:00.000Z",
-  },
-};
-
-const previewResponse = {
-  deployment_id: "preview-1",
-  status: "preview",
-  expansion_summary: {
-    components: 1,
-    routes: 1,
-    bindings: 0,
-    resources: 0,
-    diff: { create: 1, update: 0, delete: 0, unchanged: 0 },
-  },
-};
-
-const resolvedResponse = {
-  deployment_id: "dep-resolved-1",
-  status: "resolved",
-  conditions: [{ type: "Resolved", status: "true" }],
-  expansion_summary: {
-    components: 1,
-    routes: 1,
-    bindings: 0,
-    resources: 0,
-    diff: { create: 1, update: 0, delete: 0, unchanged: 0 },
+const deployIntentResponse = {
+  accepted: true,
+  mode: "gitops",
+  intent: {
+    id: "deploy-1",
+    driver: "gitops",
+    branch: "main",
+    path: "deployments/deploy-1.json",
+    commit: "abc123",
   },
 };
 
@@ -143,71 +108,7 @@ function readSpaceHeader(init: RequestInit | undefined): string | undefined {
   return headers?.["X-Takos-Space-Id"];
 }
 
-Deno.test("deploy command - creates a deployment from a repository URL", async () => {
-  const fetchStub = stub(globalThis, "fetch", (input, init) => {
-    const request = init as RequestInit | undefined;
-    assertEquals(
-      String(input),
-      "https://takos.jp/api/public/v1/deployments",
-    );
-    assertEquals(request?.method, "POST");
-    assertEquals(readSpaceHeader(request), "space-1");
-    return Promise.resolve(
-      new Response(JSON.stringify(deploymentResponse), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  });
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
-
-  try {
-    const program = createDeployProgram();
-    await program.parseAsync([
-      "node",
-      "takos",
-      "deploy",
-      "  https://github.com/acme/demo.git  ",
-      "--legacy-repo-source",
-      "--ref",
-      "main",
-      "--ref-type",
-      "branch",
-      "--group",
-      "demo-group",
-      "--env",
-      "production",
-      "--auto-approve",
-    ], { from: "node" });
-
-    assertSpyCalls(fetchStub, 1);
-    const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
-    const body = JSON.parse(String(requestInit?.body));
-    assertEquals(body.mode, "apply");
-    assertEquals(body.group, "demo-group");
-    assertEquals(body.env, "production");
-    assertEquals("provider" in body, false);
-    assertEquals("backend" in body, false);
-    assertEquals(body.source.kind, "git");
-    assertEquals(
-      body.source.repository_url,
-      "https://github.com/acme/demo.git",
-    );
-    assertEquals(body.source.ref, "main");
-    assertEquals(body.source.ref_type, "branch");
-    assertStringIncludes(
-      logOutput(logSpy.calls),
-      "ID:        dep-1",
-    );
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
-
-Deno.test("deploy command - rejects invalid repository URLs before the API call", async () => {
+Deno.test("deploy command - rejects repository URL deploy before the API call", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -216,85 +117,25 @@ Deno.test("deploy command - rejects invalid repository URLs before the API call"
   const logSpy = stub(console, "log", () => {});
   setAuthEnv();
 
-  const cases = [
-    {
-      repositoryUrl: "http://github.com/acme/demo.git",
-      message: "expected a canonical https:// URL.",
-    },
-    {
-      repositoryUrl: "https://user:pass@github.com/acme/demo.git",
-      message: "credentials are not allowed.",
-    },
-    {
-      repositoryUrl: "https://github.com/acme/demo.git?ref=main",
-      message: "query and hash are not allowed.",
-    },
-    {
-      repositoryUrl: "https://github.com",
-      message: "expected an owner/repo-like path.",
-    },
-  ];
-
-  try {
-    for (const { repositoryUrl, message } of cases) {
-      const before = logSpy.calls.length;
-      const program = createDeployProgram();
-      await assertRejects(
-        () =>
-          program.parseAsync([
-            "node",
-            "takos",
-            "deploy",
-            repositoryUrl,
-            "--legacy-repo-source",
-            "--auto-approve",
-          ], { from: "node" }),
-        CliCommandExit,
-      );
-
-      assertSpyCalls(fetchStub, 0);
-      assertStringIncludes(logOutput(logSpy.calls.slice(before)), message);
-    }
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
-
-Deno.test("deploy command - omits group when --group is not provided", async () => {
-  const fetchStub = stub(globalThis, "fetch", (input, init) => {
-    assertEquals(
-      String(input),
-      "https://takos.jp/api/public/v1/deployments",
-    );
-    assertEquals((init as RequestInit | undefined)?.method, "POST");
-    return Promise.resolve(
-      new Response(JSON.stringify(deploymentResponse), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  });
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
-
   try {
     const program = createDeployProgram();
-    await program.parseAsync([
-      "node",
-      "takos",
-      "deploy",
-      "https://github.com/acme/demo.git",
-      "--legacy-repo-source",
-      "--auto-approve",
-    ], { from: "node" });
+    await assertRejects(
+      () =>
+        program.parseAsync([
+          "node",
+          "takos",
+          "deploy",
+          "https://github.com/acme/demo.git",
+          "--auto-approve",
+        ], { from: "node" }),
+      CliCommandExit,
+    );
 
-    assertSpyCalls(fetchStub, 1);
-    const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
-    const body = JSON.parse(String(requestInit?.body));
-    assertEquals("group" in body, false);
-    assertEquals(body.source.kind, "git");
+    assertSpyCalls(fetchStub, 0);
+    assertStringIncludes(
+      logOutput(logSpy.calls),
+      "Repository URL deploy is not a current Takos CLI entry point",
+    );
   } finally {
     fetchStub.restore();
     logSpy.restore();
@@ -303,7 +144,7 @@ Deno.test("deploy command - omits group when --group is not provided", async () 
 });
 
 Deno.test(
-  "deploy command - creates a deployment from a local image manifest",
+  "deploy command - writes a GitOps intent from a local manifest",
   async () => {
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
       const request = init as RequestInit | undefined;
@@ -313,8 +154,8 @@ Deno.test(
       );
       assertEquals(request?.method, "POST");
       return Promise.resolve(
-        new Response(JSON.stringify(deploymentResponse), {
-          status: 201,
+        new Response(JSON.stringify(deployIntentResponse), {
+          status: 202,
           headers: { "Content-Type": "application/json" },
         }),
       );
@@ -330,7 +171,7 @@ Deno.test(
           "takos",
           "deploy",
           "--manifest",
-          path.join(projectDir, ".takos", "app.yml"),
+          path.join(projectDir, ".takosumi", "manifest.yml"),
           "--group",
           "demo-group",
           "--auto-approve",
@@ -343,12 +184,12 @@ Deno.test(
         const body = JSON.parse(String(requestInit?.body));
         assertEquals(body.mode, "apply");
         assertEquals(body.group, "demo-group");
-        assertEquals(body.source.kind, "inline");
-        assertEquals(body.source.artifacts, []);
         assertEquals(
-          body.manifest.compute.gateway.image,
+          body.manifest.resources[0].spec.image,
           "ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333",
         );
+        assertEquals("source" in body, false);
+        assertStringIncludes(logOutput(logSpy.calls), "Deploy intent accepted");
       });
     } finally {
       fetchStub.restore();
@@ -369,8 +210,8 @@ Deno.test(
       );
       assertEquals(request?.method, "POST");
       return Promise.resolve(
-        new Response(JSON.stringify(deploymentResponse), {
-          status: 201,
+        new Response(JSON.stringify(deployIntentResponse), {
+          status: 202,
           headers: { "Content-Type": "application/json" },
         }),
       );
@@ -397,7 +238,7 @@ Deno.test(
           "takos",
           "deploy",
           "--manifest",
-          path.join(projectDir, ".takos", "app.yml"),
+          path.join(projectDir, ".takosumi", "manifest.yml"),
           "--group",
           "demo-group",
           "--json",
@@ -409,8 +250,9 @@ Deno.test(
       assertSpyCalls(logSpy, 0);
       assertEquals(writes.length, 1);
       const parsed = JSON.parse(writes[0]);
-      assertEquals(parsed.deployment_id, "dep-1");
-      assertEquals(parsed.status, "applied");
+      assertEquals(parsed.accepted, true);
+      assertEquals(parsed.mode, "gitops");
+      assertEquals(parsed.intent.id, "deploy-1");
     } finally {
       writeStub.restore();
       fetchStub.restore();
@@ -420,7 +262,7 @@ Deno.test(
   },
 );
 
-Deno.test("deploy command - rejects local worker manifests before the API call", async () => {
+Deno.test("deploy command - rejects non-kernel manifests before the API call", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -432,7 +274,7 @@ Deno.test("deploy command - rejects local worker manifests before the API call",
   try {
     await withTempProject(async (projectDir) => {
       await fs.writeFile(
-        path.join(projectDir, ".takos", "app.yml"),
+        path.join(projectDir, ".takosumi", "manifest.yml"),
         `name: worker-app
 compute:
   gateway:
@@ -448,20 +290,18 @@ compute:
             "takos",
             "deploy",
             "--manifest",
-            path.join(projectDir, ".takos", "app.yml"),
+            path.join(projectDir, ".takosumi", "manifest.yml"),
             "--group",
             "demo-group",
-            "--preview",
+            "--auto-approve",
           ], { from: "node" }),
         CliCommandExit,
       );
     });
     assertSpyCalls(fetchStub, 0);
-    assertStringIncludes(logOutput(logSpy.calls), "takosumi-git init");
-    assertStringIncludes(logOutput(logSpy.calls), "takosumi-git push");
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "digest-pinned image manifest",
+      "Deploy manifest must be a takosumi Manifest envelope",
     );
   } finally {
     fetchStub.restore();
@@ -489,7 +329,7 @@ Deno.test("deploy command - rejects repository URLs combined with --manifest", a
           "deploy",
           "https://github.com/acme/demo.git",
           "--manifest",
-          ".takos/app.yml",
+          ".takosumi/manifest.yml",
           "--auto-approve",
         ], { from: "node" }),
       CliCommandExit,
@@ -507,7 +347,7 @@ Deno.test("deploy command - rejects repository URLs combined with --manifest", a
   }
 });
 
-Deno.test("deploy command - rejects repository URLs without legacy opt-in", async () => {
+Deno.test("deploy command - rejects repository URL deploy", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -533,7 +373,7 @@ Deno.test("deploy command - rejects repository URLs without legacy opt-in", asyn
     assertSpyCalls(fetchStub, 0);
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "Repository URL deploy is legacy compatibility sugar",
+      "Repository URL deploy is not a current Takos CLI entry point",
     );
   } finally {
     fetchStub.restore();
@@ -798,64 +638,38 @@ Deno.test("deploy command - requires an explicit local manifest", async () => {
 });
 
 Deno.test(
-  "deploy command - previews a repository URL deployment via mode=preview",
+  "deploy command - rejects preview mode for GitOps deploy intent",
   async () => {
-    const fetchStub = stub(globalThis, "fetch", (input, init) => {
-      const request = init as RequestInit | undefined;
-      assertEquals(
-        String(input),
-        "https://takos.jp/api/public/v1/deployments",
-      );
-      assertEquals(request?.method, "POST");
-      return Promise.resolve(
-        new Response(
-          JSON.stringify(previewResponse),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
-      );
-    });
+    const fetchStub = stub(
+      globalThis,
+      "fetch",
+      () => Promise.reject(new Error("fetch should not be called")),
+    );
     const logSpy = stub(console, "log", () => {});
     setAuthEnv();
 
     try {
-      const program = createDeployProgram();
-      await program.parseAsync([
-        "node",
-        "takos",
-        "deploy",
-        "https://github.com/acme/demo.git",
-        "--legacy-repo-source",
-        "--ref",
-        "main",
-        "--ref-type",
-        "branch",
-        "--group",
-        "demo-group",
-        "--env",
-        "production",
-        "--preview",
-      ], { from: "node" });
+      await withTempProject(async (projectDir) => {
+        const program = createDeployProgram();
+        await assertRejects(
+          () =>
+            program.parseAsync([
+              "node",
+              "takos",
+              "deploy",
+              "--manifest",
+              path.join(projectDir, ".takosumi", "manifest.yml"),
+              "--preview",
+            ], { from: "node" }),
+          CliCommandExit,
+        );
+      });
 
-      assertSpyCalls(fetchStub, 1);
-      const requestInit = fetchStub.calls[0]?.args[1] as
-        | RequestInit
-        | undefined;
-      const body = JSON.parse(String(requestInit?.body));
-      assertEquals(body.mode, "preview");
-      assertEquals(body.group, "demo-group");
-      assertEquals(body.env, "production");
-      assertEquals("provider" in body, false);
-      assertEquals("backend" in body, false);
-      assertEquals(body.source.kind, "git");
-      assertEquals(
-        body.source.repository_url,
-        "https://github.com/acme/demo.git",
+      assertSpyCalls(fetchStub, 0);
+      assertStringIncludes(
+        logOutput(logSpy.calls),
+        "takos deploy only writes GitOps deploy intents in apply mode",
       );
-      assertEquals(body.source.ref, "main");
-      assertEquals(body.source.ref_type, "branch");
     } finally {
       fetchStub.restore();
       logSpy.restore();
@@ -865,50 +679,37 @@ Deno.test(
 );
 
 Deno.test(
-  "deploy command - resolves without applying when --resolve-only is set",
+  "deploy command - rejects resolve-only mode for GitOps deploy intent",
   async () => {
-    const fetchStub = stub(globalThis, "fetch", (input, init) => {
-      const request = init as RequestInit | undefined;
-      assertEquals(
-        String(input),
-        "https://takos.jp/api/public/v1/deployments",
-      );
-      assertEquals(request?.method, "POST");
-      return Promise.resolve(
-        new Response(JSON.stringify(resolvedResponse), {
-          status: 201,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    });
+    const fetchStub = stub(
+      globalThis,
+      "fetch",
+      () => Promise.reject(new Error("fetch should not be called")),
+    );
     const logSpy = stub(console, "log", () => {});
     setAuthEnv();
 
     try {
-      const program = createDeployProgram();
-      await program.parseAsync([
-        "node",
-        "takos",
-        "deploy",
-        "https://github.com/acme/demo.git",
-        "--legacy-repo-source",
-        "--ref",
-        "main",
-        "--ref-type",
-        "branch",
-        "--resolve-only",
-      ], { from: "node" });
+      await withTempProject(async (projectDir) => {
+        const program = createDeployProgram();
+        await assertRejects(
+          () =>
+            program.parseAsync([
+              "node",
+              "takos",
+              "deploy",
+              "--manifest",
+              path.join(projectDir, ".takosumi", "manifest.yml"),
+              "--resolve-only",
+            ], { from: "node" }),
+          CliCommandExit,
+        );
+      });
 
-      assertSpyCalls(fetchStub, 1);
-      const requestInit = fetchStub.calls[0]?.args[1] as
-        | RequestInit
-        | undefined;
-      const body = JSON.parse(String(requestInit?.body));
-      assertEquals(body.mode, "resolve");
-      assertEquals(body.source.kind, "git");
+      assertSpyCalls(fetchStub, 0);
       assertStringIncludes(
         logOutput(logSpy.calls),
-        "takos apply dep-resolved-1",
+        "takos deploy only writes GitOps deploy intents in apply mode",
       );
     } finally {
       fetchStub.restore();

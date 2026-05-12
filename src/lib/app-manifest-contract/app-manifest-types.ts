@@ -91,7 +91,7 @@ export type AppConsume = {
   as?: string;
   request?: Record<string, unknown>;
   inject?: AppConsumeInject;
-  /** @deprecated legacy alias for inject.env. */
+  /** @deprecated old alias for inject.env. */
   env?: Record<string, string>;
 };
 
@@ -191,7 +191,7 @@ export type AppPublication = {
   publisher?: string;
   type: string;
   outputs?: Record<string, AppPublicationOutput>;
-  /** @deprecated retained for stored legacy rows only; public manifests use outputs. */
+  /** @deprecated retained for stored rows only; public manifests use outputs. */
   path?: string;
   display?: AppPublicationDisplay;
   auth?: AppPublicationAuth;

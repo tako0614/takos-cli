@@ -44,7 +44,7 @@ import {
   validateServiceScaling,
 } from "../app-manifest-validation.ts";
 import { validateSemver } from "./parse-common.ts";
-import { legacyBuildDisabledMessage } from "./legacy-build.ts";
+import { retiredBuildDisabledMessage } from "./retired-build.ts";
 import { parseCompute } from "./parse-compute.ts";
 import { parsePublish } from "./parse-publish.ts";
 import { parseResources } from "./parse-resources.ts";
@@ -479,7 +479,7 @@ function parseOverrideComputeEntry(
   if (icon) result.icon = icon;
 
   if (record.build != null) {
-    throw new Error(legacyBuildDisabledMessage(`${prefix}.build`));
+    throw new Error(retiredBuildDisabledMessage(`${prefix}.build`));
   }
 
   const image = validateDigestPinnedImageRef(

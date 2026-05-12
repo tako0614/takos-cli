@@ -4,8 +4,7 @@
  * Removes the manifest-managed primitives owned by a group by submitting a
  * Deployment with an empty/uninstall manifest under `mode="apply"`. The flow
  * stays inside the v3 single-endpoint family rooted at
- * `/api/public/v1/deployments` (spec § 17); no legacy v2 deploy paths are
- * involved.
+ * `/api/public/v1/deployments` (spec § 17).
  *
  * Steps:
  *   1. Resolve the GroupHead (`GET /api/public/v1/groups/:groupId/head`) to

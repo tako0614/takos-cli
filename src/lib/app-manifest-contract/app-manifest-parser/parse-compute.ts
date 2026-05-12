@@ -40,7 +40,7 @@ import {
   validateReadinessPath,
   validateServiceScaling,
 } from "../app-manifest-validation.ts";
-import { legacyBuildDisabledMessage } from "./legacy-build.ts";
+import { retiredBuildDisabledMessage } from "./retired-build.ts";
 
 const COMPUTE_FIELDS = new Set([
   "kind",
@@ -393,14 +393,14 @@ function parseConsume(
     if (record.env != null && record.inject != null) {
       throw new Error(`${consumePrefix} must not combine env and inject`);
     }
-    const legacyEnv = normalizeConsumeEnvAliases(
+    const envAlias = normalizeConsumeEnvAliases(
       asStringMap(record.env, `${consumePrefix}.env`),
       `${consumePrefix}.env`,
     );
     const inject = parseConsumeInject(
       record.inject,
       `${consumePrefix}.inject`,
-    ) ?? (legacyEnv ? { env: legacyEnv } : undefined);
+    ) ?? (envAlias ? { env: envAlias } : undefined);
     const alias = asString(record.as, `${consumePrefix}.as`);
     const request = parseConsumeRequest(
       record.request,
@@ -658,7 +658,7 @@ function detectComputeKind(
     );
   }
   if (hasBuild) {
-    throw new Error(legacyBuildDisabledMessage(`${prefix}.build`));
+    throw new Error(retiredBuildDisabledMessage(`${prefix}.build`));
   }
   if (explicitKind === "worker") {
     return assertKind("worker");

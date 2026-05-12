@@ -1,9 +1,9 @@
 # AGENTS.md — takos-cli
 
-`takos-cli` は Takos platform 向けの **task-oriented CLI** で、 認証 / endpoint
-切り替え / `space`・`repo`・`thread`・ `run`・`resource` 等の API command /
-digest-pinned image manifest を Takos public deploy API に送る deploy command
-を提供する。
+`takos-cli` は Takos product/public API 向けの **task-oriented CLI** で、 認証 /
+endpoint 切り替え / `space`・`repo`・`thread`・ `run`・`resource` 等の API
+command / digest-pinned image manifest を Takos app gateway の deploy-intent API
+に送る deploy command を提供する。
 
 ## 責務
 
@@ -11,7 +11,8 @@ digest-pinned image manifest を Takos public deploy API に送る deploy comman
 
 - Takos API への認証と endpoint 切り替え
 - `space` / `repo` / `thread` / `run` / `resource` の task-oriented command
-- digest-pinned image manifest を Takos public deploy API に送る deploy command
+- digest-pinned image manifest を Takos app gateway の deploy-intent API に送る
+  deploy command
 - backend-neutral deploy client と API request formatting
 - CLI が deploy 時に読む app manifest contract
   (`src/lib/app-manifest-contract/`)

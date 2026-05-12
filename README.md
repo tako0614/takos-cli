@@ -2,15 +2,16 @@
 
 Takos CLI の standalone repository です。
 
-`takos-cli` は Takos platform 向けの task-oriented CLI です。この repository
-には CLI 本体、テスト、そして `takos/` monorepo に依存せず build
+`takos-cli` は Takos product/public API 向けの task-oriented CLI です。この
+repository には CLI 本体、テスト、そして `takos/` monorepo に依存せず build
 するために必要な CLI-local app manifest contract を含めています。
 
 ## この repo が持つもの
 
 - Takos API 向けの認証と endpoint 切り替え
 - `space`、`repo`、`thread`、`run`、`resource` などの task-oriented API command
-- digest-pinned image manifest を Takos public deploy API に送る deploy command
+- digest-pinned image manifest を Takos app gateway の deploy-intent API に送る
+  deploy command
 - backend-neutral deploy client と API request formatting
 
 ## Repository Layout

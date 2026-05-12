@@ -215,15 +215,7 @@ export async function executeWebSocketStream(
   const { url, headers } = createAuthorizedRequest(path, options);
   const wsUrl = toWebSocketUrl(url);
 
-  const wsModule = await import("ws");
-  const WebSocketCtor = wsModule.default as unknown as new (
-    address: string,
-    options: { headers: Record<string, string> },
-  ) => {
-    on: (event: string, handler: (...args: unknown[]) => void) => void;
-    send: (data: string) => void;
-    close: (code?: number, data?: string) => void;
-  };
+  const { default: WebSocketCtor } = await import("ws");
 
   let interrupted = false;
   let closeCode = 1000;

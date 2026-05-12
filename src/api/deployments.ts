@@ -157,7 +157,7 @@ export function createDeployment(
     `/api/public/v1/deployments`,
     {
       method: "POST",
-      body: body as unknown as Record<string, unknown>,
+      body,
       headers: withSpace(spaceId),
       timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     },

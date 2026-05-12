@@ -135,12 +135,18 @@ function extractErrorMessage(
   return fallback;
 }
 
+// Body shape accepted by `api()`: either a FormData (for multipart uploads)
+// or any structured payload that JSON.stringify can serialize. Using `object`
+// rather than `Record<string, unknown>` lets typed request interfaces pass
+// without `as unknown as Record<string, unknown>` casts at call sites.
+export type ApiRequestBody = FormData | object;
+
 // Make API request
 export async function api<T>(
   path: string,
   options: {
     method?: string;
-    body?: FormData | Record<string, unknown>;
+    body?: ApiRequestBody;
     headers?: Record<string, string>;
     timeout?: number; // Optional timeout in milliseconds (default: configured API timeout)
   } = {},

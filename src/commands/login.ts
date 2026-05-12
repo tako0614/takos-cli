@@ -117,7 +117,7 @@ async function createAccountsPat(input: {
 export function registerLoginCommand(program: Command): void {
   program
     .command("login")
-    .description("Authenticate with takos platform")
+    .description("Authenticate with the Takos product")
     .option("--api-url <url>", "API URL (default: https://takos.jp)")
     .option(
       "--token <token>",

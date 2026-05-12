@@ -45,7 +45,7 @@ export function createProgram(argv: string[] = process.argv): Command {
 
   program
     .name("takos")
-    .description("Unified task-oriented CLI for Takos platform")
+    .description("Unified task-oriented CLI for the Takos product")
     .version("0.2.0");
 
   registerLoginCommand(program);

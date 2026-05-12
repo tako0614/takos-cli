@@ -1,5 +1,5 @@
 /**
- * API client for takos platform
+ * API client for the Takos product API
  */
 
 import { getApiRequestTimeoutMs, getConfig } from "./config.ts";

@@ -20,15 +20,15 @@ import {
 } from "../lib/platform-surface.ts";
 
 export type ResourceCapability =
-  | "d1"
-  | "r2"
-  | "kv"
+  | "sql"
+  | "object-store"
+  | "key-value"
   | "queue"
-  | "vectorize"
-  | "secretRef"
-  | "analyticsEngine"
+  | "vector-index"
+  | "secret"
+  | "analytics-engine"
   | "workflow"
-  | "durableObject";
+  | "durable-object";
 
 export type ResourceCommandOptions = { space?: string };
 export type ResourceJsonCommandOptions = ResourceCommandOptions & {
@@ -80,25 +80,35 @@ export type ResourceListItem = {
 };
 
 export const VALID_RESOURCE_TYPES: ResourceCapability[] = [
-  "d1",
-  "r2",
-  "kv",
+  "sql",
+  "object-store",
+  "key-value",
   "queue",
-  "vectorize",
-  "secretRef",
-  "analyticsEngine",
+  "vector-index",
+  "secret",
+  "analytics-engine",
   "workflow",
-  "durableObject",
+  "durable-object",
 ];
 
-const RESOURCE_TYPE_ALIASES: Record<string, ResourceCapability> = {
-  sql: "d1",
-  object_store: "r2",
-  vector_index: "vectorize",
-  secret: "secretRef",
-  analytics_store: "analyticsEngine",
+const RETIRED_RESOURCE_TYPE_REPLACEMENTS: Record<string, ResourceCapability> = {
+  d1: "sql",
+  r2: "object-store",
+  object_store: "object-store",
+  kv: "key-value",
+  vectorize: "vector-index",
+  vector_index: "vector-index",
+  secretRef: "secret",
+  secret_ref: "secret",
+  analyticsEngine: "analytics-engine",
+  analytics_engine: "analytics-engine",
+  analytics_store: "analytics-engine",
   workflow_runtime: "workflow",
-  durable_namespace: "durableObject",
+  workflow_binding: "workflow",
+  durableObject: "durable-object",
+  durable_object: "durable-object",
+  durable_object_namespace: "durable-object",
+  durable_namespace: "durable-object",
 };
 
 export function resolveResourceType(input: {
@@ -112,12 +122,25 @@ export function resolveResourceType(input: {
     );
   }
 
-  const normalized = RESOURCE_TYPE_ALIASES[input.type] ?? input.type;
-  if (VALID_RESOURCE_TYPES.includes(normalized as ResourceCapability)) {
-    return normalized as ResourceCapability;
+  const type = input.type.trim();
+  if (VALID_RESOURCE_TYPES.includes(type as ResourceCapability)) {
+    return type as ResourceCapability;
   }
 
-  throw new Error(`Invalid resource type: ${input.type ?? ""}`);
+  const replacement = RETIRED_RESOURCE_TYPE_REPLACEMENTS[type];
+  if (replacement) {
+    throw new Error(
+      `Invalid resource type: ${type}. Use ${replacement} instead. Valid resource types: ${
+        VALID_RESOURCE_TYPES.join(", ")
+      }`,
+    );
+  }
+
+  throw new Error(
+    `Invalid resource type: ${type}. Valid resource types: ${
+      VALID_RESOURCE_TYPES.join(", ")
+    }`,
+  );
 }
 
 export async function requireResource(spaceId: string, name: string) {

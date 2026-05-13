@@ -8,7 +8,7 @@ import { prepareBody } from "./api-request-body.ts";
 import { parseBodyByContentType, printSuccess } from "./api-request-output.ts";
 import { Buffer } from "node:buffer";
 
-// Re-export everything from sub-modules for backward compatibility
+// Re-export parser helpers used by the command tests and stream command.
 export { parseKeyValue, prepareBody } from "./api-request-body.ts";
 export type { BodyPreparation } from "./api-request-body.ts";
 export { parseSseEventBlock } from "./api-request-sse.ts";

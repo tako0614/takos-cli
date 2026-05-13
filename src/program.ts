@@ -5,13 +5,8 @@ import { registerLoginCommand } from "./commands/login.ts";
 import { registerTaskCommands } from "./commands/api.ts";
 import { registerEndpointCommand } from "./commands/endpoint.ts";
 import { registerDeployCommand } from "./commands/deploy.ts";
-import { registerApplyCommand } from "./commands/apply.ts";
-import { registerDiffCommand } from "./commands/diff.ts";
-import { registerApproveCommand } from "./commands/approve.ts";
-import { registerRollbackCommand } from "./commands/rollback.ts";
 import { registerInstallCommand } from "./commands/install.ts";
 import { registerInstallationsCommand } from "./commands/installations.ts";
-import { registerUninstallCommand } from "./commands/uninstall.ts";
 import { registerResourceCommand } from "./commands/resource.ts";
 import { registerGroupCommand } from "./commands/group/index.ts";
 import { isAuthenticated, isContainerMode } from "./lib/config.ts";
@@ -27,13 +22,8 @@ const AUTH_OPTIONAL_COMMANDS = new Set([
   "help",
   "endpoint",
   "deploy",
-  "apply",
-  "diff",
-  "approve",
-  "rollback",
   "install",
   "installations",
-  "uninstall",
   "resource",
   "group",
 ]);
@@ -50,13 +40,8 @@ export function createProgram(argv: string[] = process.argv): Command {
 
   registerLoginCommand(program);
   registerDeployCommand(program);
-  registerApplyCommand(program);
-  registerDiffCommand(program);
-  registerApproveCommand(program);
-  registerRollbackCommand(program);
   registerInstallCommand(program);
   registerInstallationsCommand(program);
-  registerUninstallCommand(program);
   registerResourceCommand(program);
   registerGroupCommand(program);
   registerEndpointCommand(program);

@@ -57,7 +57,6 @@ const TOP_LEVEL_FIELDS = new Set([
   "resources",
   "routes",
   "publish",
-  "publications",
   "env",
   "overrides",
 ]);
@@ -142,7 +141,6 @@ const OVERRIDE_CONSUME_FIELDS = new Set([
   "as",
   "request",
   "inject",
-  "env",
 ]);
 const OVERRIDE_CONSUME_INJECT_FIELDS = new Set(["env", "defaults"]);
 const OVERRIDE_PUBLISH_FIELDS = new Set([
@@ -153,9 +151,8 @@ const OVERRIDE_PUBLISH_FIELDS = new Set([
   "auth",
   "type",
   "outputs",
-  "title",
 ]);
-const OVERRIDE_OUTPUT_FIELDS = new Set(["kind", "routeRef", "route"]);
+const OVERRIDE_OUTPUT_FIELDS = new Set(["kind", "routeRef"]);
 const OVERRIDE_DISPLAY_FIELDS = new Set([
   "title",
   "description",
@@ -405,9 +402,6 @@ function parseOverrideConsumes(
         `${prefix}[${index}].request`,
       );
     }
-    if (record.env != null && record.inject != null) {
-      throw new Error(`${prefix}[${index}] must not combine env and inject`);
-    }
     if (record.inject != null) {
       const injectRecord = requireRecord(
         record.inject,
@@ -432,14 +426,6 @@ function parseOverrideConsumes(
         );
       }
       result.inject = inject;
-    }
-    if (record.env != null) {
-      result.inject = {
-        env: asStringMap(
-          record.env,
-          `${prefix}[${index}].env`,
-        ),
-      };
     }
     return result;
   });
@@ -641,27 +627,13 @@ function parseOverridePublishEntry(
         output.routeRef,
         `${prefix}.outputs.${outputName}.routeRef`,
       );
-      const route = asString(
-        output.route,
-        `${prefix}.outputs.${outputName}.route`,
-      );
       const parsedOutput: Record<string, unknown> = {};
       if (kind) parsedOutput.kind = kind;
       if (routeRef) parsedOutput.routeRef = routeRef;
-      if (route) {
-        if (!route.startsWith("/")) {
-          throw new Error(
-            `${prefix}.outputs.${outputName}.route must start with '/' (got: ${route})`,
-          );
-        }
-        parsedOutput.route = route;
-      }
       parsedOutputs[outputName] = parsedOutput;
     }
     result.outputs = parsedOutputs;
   }
-  const title = asString(record.title, `${prefix}.title`);
-  if (title) result.title = title;
 
   return result;
 }
@@ -708,16 +680,10 @@ function parseOverrides(
         "compute",
         "routes",
         "publish",
-        "publications",
         "env",
         "resources",
       ]),
     );
-    if (envRecord.publish != null && envRecord.publications != null) {
-      throw new Error(
-        `overrides.${envName}.publish and overrides.${envName}.publications cannot be used together`,
-      );
-    }
     const entry: AppManifestOverride = {};
     if (envRecord.compute != null) {
       entry.compute = parseOverrideCompute(envRecord.compute) as Record<
@@ -735,7 +701,7 @@ function parseOverrides(
         { validateTargets: false },
       );
     }
-    const publishOverride = envRecord.publications ?? envRecord.publish;
+    const publishOverride = envRecord.publish;
     if (publishOverride != null) {
       entry.publish = parseOverridePublish(
         publishOverride,

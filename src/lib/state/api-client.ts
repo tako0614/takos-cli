@@ -7,10 +7,8 @@
  *
  * File-backed state is now explicit offline mode.
  *
- * Retired-path note: these state CRUD helpers still target the old `/api/groups*`
- * state endpoints. Current `takos group` online commands use the space-scoped
- * group API directly; keep these helpers only for compatibility callers until
- * a space-scoped state CRUD contract exists.
+ * These state CRUD helpers target `/api/groups*` state endpoints. Current
+ * `takos group` online commands use the space-scoped group API directly.
  */
 
 import { api } from "../api.ts";

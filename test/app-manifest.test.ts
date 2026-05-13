@@ -85,8 +85,9 @@ compute:
     kind: worker
     consume:
       - publication: takos.api-key
-        env:
-          endpoint: TAKOS_API_URL
+        inject:
+          env:
+            endpoint: TAKOS_API_URL
     containers:
       sidecar:
         image: ghcr.io/example/sidecar@sha256:1111111111111111111111111111111111111111111111111111111111111111
@@ -180,6 +181,108 @@ compute:
       () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
       Error,
       "publish[0].path is not supported by the publish/consume contract",
+    );
+  });
+});
+
+Deno.test("deploy manifest - rejects retired consume env alias", async () => {
+  await withTempRepo({
+    ".takosumi/manifest.yml": `
+name: retired-consume-env
+compute:
+  gateway:
+    kind: worker
+    consume:
+      - publication: takos.api-key
+        env:
+          endpoint: TAKOS_API_URL
+`,
+  }, async (repoDir) => {
+    await assertRejects(
+      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      Error,
+      "compute.gateway.consume[0].env is not supported by the app manifest contract",
+    );
+  });
+});
+
+Deno.test("deploy manifest - rejects retired publications alias", async () => {
+  await withTempRepo({
+    ".takosumi/manifest.yml": `
+name: retired-publications
+publications:
+  - name: gateway-ui
+    type: UiSurface
+    outputs:
+      default:
+        kind: url
+        routeRef: gateway-root
+compute:
+  gateway:
+    kind: worker
+routes:
+  - id: gateway-root
+    target: gateway
+    path: /
+`,
+  }, async (repoDir) => {
+    await assertRejects(
+      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      Error,
+      "publications is not supported by the app manifest contract",
+    );
+  });
+});
+
+Deno.test("deploy manifest - rejects retired route output alias", async () => {
+  await withTempRepo({
+    ".takosumi/manifest.yml": `
+name: retired-route-output
+publish:
+  - name: gateway-ui
+    type: UiSurface
+    outputs:
+      default:
+        kind: url
+        route: /
+compute:
+  gateway:
+    kind: worker
+`,
+  }, async (repoDir) => {
+    await assertRejects(
+      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      Error,
+      "publish[0].outputs.default.route is not supported by the publish/consume contract",
+    );
+  });
+});
+
+Deno.test("deploy manifest - rejects retired publication title alias", async () => {
+  await withTempRepo({
+    ".takosumi/manifest.yml": `
+name: retired-title
+publish:
+  - name: gateway-ui
+    type: UiSurface
+    title: Gateway
+    outputs:
+      default:
+        kind: url
+        routeRef: gateway-root
+compute:
+  gateway:
+    kind: worker
+routes:
+  - id: gateway-root
+    target: gateway
+    path: /
+`,
+  }, async (repoDir) => {
+    await assertRejects(
+      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      Error,
+      "publish[0].title is not supported by the publish/consume contract",
     );
   });
 });

@@ -7,10 +7,6 @@ import {
   createDeployment,
   type CreateDeploymentRequest,
 } from "../api/deployments.ts";
-import {
-  formatExpansionSummary,
-  printDeploymentHeader,
-} from "../api/deployment-format.ts";
 
 export type DeployCommandOptions = {
   space?: string;
@@ -163,33 +159,21 @@ export async function runDeploy(
 
   if (options.json) {
     printJson(response.data);
-    if ("status" in response.data && response.data.status === "failed") {
-      cliExit(1);
-    }
     return;
   }
 
-  if (isGitOpsAcceptedResponse(response.data)) {
-    console.log(cyan("Deploy intent accepted."));
-    console.log(`  ID:      ${response.data.intent.id}`);
-    console.log(`  Branch:  ${response.data.intent.branch}`);
-    console.log(`  Path:    ${response.data.intent.path}`);
-    if (response.data.intent.commit) {
-      console.log(`  Commit:  ${response.data.intent.commit}`);
-    }
-    return;
+  if (!isGitOpsAcceptedResponse(response.data)) {
+    console.log(red("Error: deploy gateway returned an unexpected response."));
+    cliExit(1);
   }
 
-  printDeploymentHeader(response.data, {
-    title: "Deployment",
-  });
-
-  const summary = formatExpansionSummary(response.data.expansion_summary);
-  if (!summary) {
-    console.log(dim("(No expansion summary returned by server.)"));
+  console.log(cyan("Deploy intent accepted."));
+  console.log(`  ID:      ${response.data.intent.id}`);
+  console.log(`  Branch:  ${response.data.intent.branch}`);
+  console.log(`  Path:    ${response.data.intent.path}`);
+  if (response.data.intent.commit) {
+    console.log(`  Commit:  ${response.data.intent.commit}`);
   }
-
-  if (response.data.status === "failed") cliExit(1);
 }
 
 function isGitOpsAcceptedResponse(

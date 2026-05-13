@@ -91,8 +91,6 @@ export type AppConsume = {
   as?: string;
   request?: Record<string, unknown>;
   inject?: AppConsumeInject;
-  /** @deprecated old alias for inject.env. */
-  env?: Record<string, string>;
 };
 
 export type AppConsumeInject = {
@@ -191,12 +189,8 @@ export type AppPublication = {
   publisher?: string;
   type: string;
   outputs?: Record<string, AppPublicationOutput>;
-  /** @deprecated retained for stored rows only; public manifests use outputs. */
-  path?: string;
   display?: AppPublicationDisplay;
   auth?: AppPublicationAuth;
-  /** @deprecated use display.title. */
-  title?: string;
   spec?: Record<string, unknown>;
 };
 
@@ -205,8 +199,6 @@ export type AppPublicationOutputKind = "url" | "string" | "secret";
 export type AppPublicationOutput = {
   kind?: AppPublicationOutputKind;
   routeRef?: string;
-  /** @deprecated use routeRef with routes[].id. */
-  route?: string;
 };
 
 export type AppPublicationDisplay = {
@@ -246,10 +238,10 @@ export type AppManifest = {
 };
 
 // ============================================================
-// Supporting types for the deploy pipeline
+// Supporting types for the bundle pipeline
 // ============================================================
 
-export type GroupDeploymentSnapshotBuildSource = {
+export type AppManifestBuildSource = {
   service_name: string;
   artifact_path: string;
 };

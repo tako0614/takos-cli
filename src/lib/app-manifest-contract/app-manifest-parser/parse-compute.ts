@@ -86,7 +86,6 @@ const CONSUME_FIELDS = new Set([
   "as",
   "request",
   "inject",
-  "env",
 ]);
 const CONSUME_INJECT_FIELDS = new Set(["env", "defaults"]);
 const CLOUDFLARE_FIELDS = new Set(["container"]);
@@ -390,17 +389,10 @@ function parseConsume(
     const record = asRecord(entry);
     const consumePrefix = `${prefix}.consume[${index}]`;
     assertAllowedFields(record, consumePrefix, CONSUME_FIELDS);
-    if (record.env != null && record.inject != null) {
-      throw new Error(`${consumePrefix} must not combine env and inject`);
-    }
-    const envAlias = normalizeConsumeEnvAliases(
-      asStringMap(record.env, `${consumePrefix}.env`),
-      `${consumePrefix}.env`,
-    );
     const inject = parseConsumeInject(
       record.inject,
       `${consumePrefix}.inject`,
-    ) ?? (envAlias ? { env: envAlias } : undefined);
+    );
     const alias = asString(record.as, `${consumePrefix}.as`);
     const request = parseConsumeRequest(
       record.request,

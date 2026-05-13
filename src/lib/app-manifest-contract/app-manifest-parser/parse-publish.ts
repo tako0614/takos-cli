@@ -17,7 +17,6 @@ const PUBLICATION_FIELDS = new Set([
   "outputs",
   "display",
   "auth",
-  "title",
   "spec",
 ]);
 
@@ -34,7 +33,7 @@ const FILE_HANDLER_SPEC_FIELDS = new Set([
   "extensions",
 ]);
 
-const OUTPUT_FIELDS = new Set(["kind", "routeRef", "route"]);
+const OUTPUT_FIELDS = new Set(["kind", "routeRef"]);
 const DISPLAY_FIELDS = new Set([
   "title",
   "description",
@@ -45,11 +44,6 @@ const DISPLAY_FIELDS = new Set([
 const AUTH_FIELDS = new Set(["bearer"]);
 const AUTH_BEARER_FIELDS = new Set(["secretRef"]);
 const OUTPUT_KINDS = new Set(["url", "string", "secret"]);
-
-function fileHandlerPathHasIdTemplate(path: string | undefined): boolean {
-  return typeof path === "string" &&
-    path.split("/").some((segment) => segment === ":id");
-}
 
 function assertAllowedFields(
   record: Record<string, unknown>,
@@ -125,21 +119,6 @@ function parseOptionalAuth(
   return { bearer: { secretRef } };
 }
 
-function retiredAuthSecretRef(
-  spec: Record<string, unknown> | undefined,
-): string | undefined {
-  const value = spec?.authSecretRef;
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function specWithoutRetiredAuth(
-  spec: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (!spec || spec.authSecretRef == null) return spec;
-  const { authSecretRef: _authSecretRef, ...rest } = spec;
-  return Object.keys(rest).length > 0 ? rest : undefined;
-}
-
 function parsePublicationOutputs(
   prefix: string,
   raw: unknown,
@@ -158,19 +137,10 @@ function parsePublicationOutputs(
       throw new Error(`${outputPrefix}.kind must be url, string, or secret`);
     }
     const routeRef = asString(output.routeRef, `${outputPrefix}.routeRef`);
-    const route = asString(output.route, `${outputPrefix}.route`);
-    if (route && routeRef) {
-      throw new Error(`${outputPrefix} must not combine route and routeRef`);
-    }
-    if (!route && !routeRef) {
+    if (!routeRef) {
       throw new Error(`${outputPrefix}.routeRef is required`);
     }
-    if (route && !route.startsWith("/")) {
-      throw new Error(
-        `${outputPrefix}.route must start with '/' (got: ${route})`,
-      );
-    }
-    if (routeRef && !kind) {
+    if (!kind) {
       throw new Error(`${outputPrefix}.kind is required when routeRef is used`);
     }
     if (kind && kind !== "url") {
@@ -180,8 +150,7 @@ function parsePublicationOutputs(
       ...(kind
         ? { kind: kind as "url" | "string" | "secret" }
         : { kind: "url" }),
-      ...(routeRef ? { routeRef } : {}),
-      ...(route ? { route } : {}),
+      routeRef,
     };
   }
   if (Object.keys(outputs).length === 0) {
@@ -190,24 +159,10 @@ function parsePublicationOutputs(
   return outputs;
 }
 
-function firstRouteOutput(
-  outputs: Record<string, AppPublicationOutput>,
-): string | undefined {
-  return Object.values(outputs).find((output) => output.route)?.route;
-}
-
 function validateFileHandlerPublication(
   prefix: string,
-  outputs: Record<string, AppPublicationOutput>,
   spec: Record<string, unknown> | undefined,
 ): void {
-  const path = firstRouteOutput(outputs);
-  if (path && !fileHandlerPathHasIdTemplate(path)) {
-    throw new Error(
-      `${prefix}.outputs must include a route with :id for FileHandler`,
-    );
-  }
-
   const mimeTypes = asStringArray(spec?.mimeTypes, `${prefix}.spec.mimeTypes`);
   const extensions = asStringArray(
     spec?.extensions,
@@ -244,28 +199,12 @@ export function parsePublicationEntry(
     );
   }
   const outputs = parsePublicationOutputs(prefix, record.outputs);
-  const usesRouteAlias = Object.values(outputs).some((output) => output.route);
-  if (usesRouteAlias && !publisher) {
-    throw new Error(`${prefix}.publisher is required when outputs use route`);
-  }
-  const title = asString(record.title, `${prefix}.title`);
   const display = parseOptionalDisplay(prefix, record.display);
-  if (title && display?.title) {
-    throw new Error(`${prefix} must not combine title and display.title`);
-  }
   const spec = parseOptionalSpec(prefix, record.spec);
   const auth = parseOptionalAuth(prefix, record.auth);
-  const authSecretRef = retiredAuthSecretRef(spec);
-  if (auth && authSecretRef) {
-    throw new Error(`${prefix} must not combine auth and spec.authSecretRef`);
-  }
-  const normalizedAuth = auth ??
-    (authSecretRef ? { bearer: { secretRef: authSecretRef } } : undefined);
-  const normalizedDisplay = display ?? (title ? { title } : undefined);
-  const normalizedSpec = specWithoutRetiredAuth(spec);
 
   if (type === FILE_HANDLER_PUBLICATION_TYPE) {
-    validateFileHandlerPublication(prefix, outputs, normalizedSpec);
+    validateFileHandlerPublication(prefix, spec);
   }
 
   return {
@@ -273,9 +212,9 @@ export function parsePublicationEntry(
     ...(publisher ? { publisher } : {}),
     type,
     outputs,
-    ...(normalizedDisplay ? { display: normalizedDisplay } : {}),
-    ...(normalizedAuth ? { auth: normalizedAuth } : {}),
-    ...(normalizedSpec ? { spec: normalizedSpec } : {}),
+    ...(display ? { display } : {}),
+    ...(auth ? { auth } : {}),
+    ...(spec ? { spec } : {}),
   };
 }
 
@@ -289,12 +228,12 @@ function validateUniqueness(entries: AppPublication[]): void {
     }
     seen.add(key);
     for (const output of Object.values(entry.outputs ?? {})) {
-      if (!output.route || !entry.publisher) continue;
-      const routeKey = `${entry.publisher}\0${output.route}`;
+      if (!output.routeRef || !entry.publisher) continue;
+      const routeKey = `${entry.publisher}\0${output.routeRef}`;
       const previous = routePublisherPaths.get(routeKey);
       if (previous != null) {
         throw new Error(
-          `publish[${index}] duplicate route publication publisher/route '${entry.publisher} ${output.route}' duplicates publish[${previous}]`,
+          `publish[${index}] duplicate route publication publisher/route '${entry.publisher} ${output.routeRef}' duplicates publish[${previous}]`,
         );
       }
       routePublisherPaths.set(routeKey, index);
@@ -305,11 +244,8 @@ function validateUniqueness(entries: AppPublication[]): void {
 export function parsePublish(
   topLevel: Record<string, unknown>,
 ): AppPublication[] {
-  if (topLevel.publish != null && topLevel.publications != null) {
-    throw new Error("publish and publications cannot be used together");
-  }
-  const raw = topLevel.publications ?? topLevel.publish;
-  const field = topLevel.publications != null ? "publications" : "publish";
+  const raw = topLevel.publish;
+  const field = "publish";
   if (raw == null) {
     return [];
   }

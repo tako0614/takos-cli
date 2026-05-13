@@ -5,7 +5,6 @@ import { Command } from "commander";
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerDeployCommand } from "../src/commands/deploy.ts";
-import { registerRollbackCommand } from "../src/commands/rollback.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 
 const localManifestYaml = `apiVersion: "1.0"
@@ -52,37 +51,10 @@ const deployIntentResponse = {
   },
 };
 
-const rollbackResponse = {
-  deployment_id: "dep-2",
-  status: "applied",
-  conditions: [{ type: "Applied", status: "true" }],
-  group_head: {
-    group_id: "demo-group",
-    current_deployment_id: "dep-2",
-    previous_deployment_id: "dep-1",
-    generation: 2,
-    advanced_at: "2026-04-02T00:00:00.000Z",
-  },
-};
-
-const rollbackHeadResponse = {
-  deployment_id: "dep-2",
-  status: "applied",
-  conditions: [{ type: "Applied", status: "true" }],
-  head: rollbackResponse.group_head,
-};
-
 function createDeployProgram(): Command {
   const program = new Command();
   program.exitOverride();
   registerDeployCommand(program);
-  return program;
-}
-
-function createRollbackProgram(): Command {
-  const program = new Command();
-  program.exitOverride();
-  registerRollbackCommand(program);
   return program;
 }
 
@@ -101,11 +73,6 @@ function clearAuthEnv() {
 function logOutput(calls: Array<{ args: unknown[] }>): string {
   return calls.map((call) => call.args.map((entry) => String(entry)).join(" "))
     .join("\n");
-}
-
-function readSpaceHeader(init: RequestInit | undefined): string | undefined {
-  const headers = init?.headers as Record<string, string> | undefined;
-  return headers?.["X-Takos-Space-Id"];
 }
 
 Deno.test("deploy command - rejects repository URL deploy before the API call", async () => {
@@ -492,126 +459,6 @@ Deno.test(
     }
   },
 );
-
-Deno.test("deploy rollback command - posts to the group rollback endpoint", async () => {
-  const fetchStub = stub(globalThis, "fetch", (input, init) => {
-    const request = init as RequestInit | undefined;
-    assertEquals(
-      String(input),
-      "https://takos.jp/api/public/v1/groups/demo-group/rollback",
-    );
-    assertEquals(request?.method, "POST");
-    assertEquals(readSpaceHeader(request), "space-1");
-    return Promise.resolve(
-      new Response(JSON.stringify(rollbackResponse), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  });
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
-
-  try {
-    const program = createRollbackProgram();
-    await program.parseAsync([
-      "node",
-      "takos",
-      "rollback",
-      "demo-group",
-    ], { from: "node" });
-
-    assertSpyCalls(fetchStub, 1);
-    const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
-    const body = JSON.parse(String(requestInit?.body));
-    assertEquals(body, {});
-    assertStringIncludes(
-      logOutput(logSpy.calls),
-      "ID:        dep-2",
-    );
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
-
-Deno.test("deploy rollback command - forwards --target-id as target_id in body", async () => {
-  const fetchStub = stub(globalThis, "fetch", (input, init) => {
-    assertEquals(
-      String(input),
-      "https://takos.jp/api/public/v1/groups/demo-group/rollback",
-    );
-    assertEquals((init as RequestInit | undefined)?.method, "POST");
-    return Promise.resolve(
-      new Response(JSON.stringify(rollbackResponse), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  });
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
-
-  try {
-    const program = createRollbackProgram();
-    await program.parseAsync([
-      "node",
-      "takos",
-      "rollback",
-      "demo-group",
-      "--target-id",
-      "dep-1",
-    ], { from: "node" });
-
-    assertSpyCalls(fetchStub, 1);
-    const requestInit = fetchStub.calls[0]?.args[1] as RequestInit | undefined;
-    const body = JSON.parse(String(requestInit?.body));
-    assertEquals(body, { target_id: "dep-1" });
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
-
-Deno.test("deploy rollback command - accepts canonical head response shape", async () => {
-  const fetchStub = stub(globalThis, "fetch", (input, init) => {
-    assertEquals(
-      String(input),
-      "https://takos.jp/api/public/v1/groups/demo-group/rollback",
-    );
-    assertEquals((init as RequestInit | undefined)?.method, "POST");
-    return Promise.resolve(
-      new Response(JSON.stringify(rollbackHeadResponse), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  });
-  const logSpy = stub(console, "log", () => {});
-  setAuthEnv();
-
-  try {
-    const program = createRollbackProgram();
-    await program.parseAsync([
-      "node",
-      "takos",
-      "rollback",
-      "demo-group",
-    ], { from: "node" });
-
-    assertSpyCalls(fetchStub, 1);
-    assertStringIncludes(
-      logOutput(logSpy.calls),
-      "Current:   dep-2",
-    );
-  } finally {
-    fetchStub.restore();
-    logSpy.restore();
-    clearAuthEnv();
-  }
-});
 
 Deno.test("deploy command - requires an explicit local manifest", async () => {
   const program = createDeployProgram();

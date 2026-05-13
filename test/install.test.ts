@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { assertRejects, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerInstallCommand } from "../src/commands/install.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
@@ -61,6 +61,25 @@ Deno.test("install command - points to current AppInstallation entry points", as
     logSpy.restore();
     clearAuthEnv();
   }
+});
+
+Deno.test("install command - help documents nonzero guidance-only behavior", async () => {
+  const output = await new Deno.Command(Deno.execPath(), {
+    args: ["run", "--allow-all", "src/index.ts", "install", "--help"],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  const help = new TextDecoder().decode(output.stdout);
+  const stderr = new TextDecoder().decode(output.stderr);
+
+  assertEquals(output.code, 0);
+  assertEquals(stderr, "");
+  assertStringIncludes(
+    help,
+    "takos install intentionally exits nonzero",
+  );
+  assertStringIncludes(help, "takosumi-git install preview <git-url>");
+  assertStringIncludes(help, "takosumi-git install apply <git-url>");
 });
 
 Deno.test("install command - includes runtime mode in takosumi-git guidance", async () => {

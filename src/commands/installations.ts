@@ -321,9 +321,15 @@ export function registerInstallationsCommand(program: Command): void {
   installations
     .command("list")
     .description("List AppInstallations for a space")
-    .option("--accounts-url <url>", "Takosumi Accounts base URL")
-    .option("--token <token>", "Takosumi Accounts bearer token or PAT")
-    .option("--space <id>", "Target space ID")
+    .option(
+      "--accounts-url <url>",
+      "Takosumi Accounts base URL (or TAKOSUMI_ACCOUNTS_URL)",
+    )
+    .option(
+      "--token <token>",
+      "Takosumi Accounts bearer/PAT (or TAKOSUMI_ACCOUNTS_TOKEN / stored takpat_...)",
+    )
+    .option("--space <id>", "Target space ID (or TAKOS_SPACE_ID)")
     .option("--json", "Machine-readable JSON output")
     .action(async (options: InstallationListOptions) => {
       try {
@@ -336,8 +342,14 @@ export function registerInstallationsCommand(program: Command): void {
   installations
     .command("inspect <installationId>")
     .description("Inspect one AppInstallation")
-    .option("--accounts-url <url>", "Takosumi Accounts base URL")
-    .option("--token <token>", "Takosumi Accounts bearer token or PAT")
+    .option(
+      "--accounts-url <url>",
+      "Takosumi Accounts base URL (or TAKOSUMI_ACCOUNTS_URL)",
+    )
+    .option(
+      "--token <token>",
+      "Takosumi Accounts bearer/PAT (or TAKOSUMI_ACCOUNTS_TOKEN / stored takpat_...)",
+    )
     .option("--json", "Machine-readable JSON output")
     .action(async (installationId: string, options: AccountsCommandOptions) => {
       try {

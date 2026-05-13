@@ -74,10 +74,22 @@ export function runInstall(
 export function registerInstallCommand(program: Command): void {
   program
     .command("install <packageRef>")
-    .description("Show the current AppInstallation install entry points")
+    .description("Explain the current AppInstallation install entry points")
     .option(
       "--mode <mode>",
-      "AppInstallation runtime mode: shared-cell | dedicated | self-hosted",
+      "Forward this runtime mode in the takosumi-git guidance: shared-cell | dedicated | self-hosted",
+    )
+    .addHelpText(
+      "after",
+      `
+Current install path:
+  takos install intentionally exits nonzero. AppInstallation creation is owned
+  by Takosumi Accounts and the takosumi-git installer.
+
+Use:
+  takosumi-git install preview <git-url> --ref <tag> --json
+  takosumi-git install apply <git-url> --ref <tag> --accounts-url <url> --space-id <id> --cost-ack
+`,
     )
     .action(async (packageRef: string, options: InstallCommandOptions) => {
       try {

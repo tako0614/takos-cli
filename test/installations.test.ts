@@ -113,6 +113,25 @@ Deno.test("installations list - calls Accounts ledger with explicit bearer", asy
     }
   }));
 
+Deno.test("installations command - help documents Accounts env fallbacks", () => {
+  const program = createProgram(["node", "takos"]);
+  const installations = program.commands.find((entry) =>
+    entry.name() === "installations"
+  );
+  const list = installations?.commands.find((entry) => entry.name() === "list");
+  const inspect = installations?.commands.find((entry) =>
+    entry.name() === "inspect"
+  );
+  const help = `${list?.helpInformation() ?? ""}\n${
+    inspect?.helpInformation() ?? ""
+  }`;
+
+  assertStringIncludes(help, "TAKOSUMI_ACCOUNTS_URL");
+  assertStringIncludes(help, "TAKOSUMI_ACCOUNTS_TOKEN");
+  assertStringIncludes(help, "stored takpat_...");
+  assertStringIncludes(help, "TAKOS_SPACE_ID");
+});
+
 Deno.test("installations inspect - uses Accounts URL and bearer env defaults", async () =>
   await withCleanEnv(async () => {
     Deno.env.set("TAKOSUMI_ACCOUNTS_URL", "https://accounts.example/");

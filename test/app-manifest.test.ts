@@ -353,7 +353,7 @@ compute:
     await assertRejects(
       () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
       Error,
-      "compute.gateway.build is no longer supported",
+      "compute.gateway.build is not part of the Takos app manifest contract",
     );
   });
 });
@@ -479,7 +479,7 @@ overrides:
     await assertRejects(
       () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
       Error,
-      "overrides.compute.gateway.build is no longer supported",
+      "overrides.compute.gateway.build is not part of the Takos app manifest contract",
     );
   });
 });

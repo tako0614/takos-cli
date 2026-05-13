@@ -249,7 +249,7 @@ export async function executeWebSocketStream(
 
     socket.on("close", (code: unknown, reason: unknown) => {
       closeCode = typeof code === "number" ? code : 0;
-      closeReason = toTextPayload(reason as Buffer);
+      closeReason = toTextPayload(reason);
       Deno.removeSignalListener("SIGINT", onSigint);
       resolve();
     });

@@ -55,12 +55,11 @@ async function loadKernelManifest(
 }
 
 function isKernelManifest(value: unknown): value is KernelManifest {
-  return Boolean(value) &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    (value as Record<string, unknown>).apiVersion === "1.0" &&
-    (value as Record<string, unknown>).kind === "Manifest" &&
-    Array.isArray((value as Record<string, unknown>).resources);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return record.apiVersion === "1.0" &&
+    record.kind === "Manifest" &&
+    Array.isArray(record.resources);
 }
 
 function pickMode(options: DeployCommandOptions): "apply" {
@@ -186,13 +185,13 @@ function isGitOpsAcceptedResponse(
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   const intent = record.intent;
+  if (!intent || typeof intent !== "object") return false;
+  const intentRecord = intent as Record<string, unknown>;
   return record.accepted === true &&
     record.mode === "gitops" &&
-    Boolean(intent) &&
-    typeof intent === "object" &&
-    typeof (intent as Record<string, unknown>).id === "string" &&
-    typeof (intent as Record<string, unknown>).branch === "string" &&
-    typeof (intent as Record<string, unknown>).path === "string";
+    typeof intentRecord.id === "string" &&
+    typeof intentRecord.branch === "string" &&
+    typeof intentRecord.path === "string";
 }
 
 export function registerDeployCommand(program: Command): void {

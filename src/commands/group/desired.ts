@@ -109,7 +109,7 @@ export function registerGroupDesiredCommand(groupCmd: Command): void {
           `/api/spaces/${spaceId}/groups/${groupId}/desired`,
           {
             method: "PUT",
-            body: desired as Record<string, unknown>,
+            body: desired,
           },
         );
         if (!res.ok) {

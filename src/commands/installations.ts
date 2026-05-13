@@ -176,12 +176,11 @@ function extractAccountsError(body: unknown, fallback: string): string {
     ]
   ) {
     if (typeof value === "string" && value.trim()) return value.trim();
-    if (
-      value && typeof value === "object" &&
-      typeof (value as { message?: unknown }).message === "string" &&
-      (value as { message: string }).message.trim()
-    ) {
-      return (value as { message: string }).message.trim();
+    if (value && typeof value === "object") {
+      const nested = (value as { message?: unknown }).message;
+      if (typeof nested === "string" && nested.trim()) {
+        return nested.trim();
+      }
     }
   }
   return fallback;

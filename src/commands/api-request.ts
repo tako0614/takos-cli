@@ -204,7 +204,7 @@ export async function executeApiRequest(
     response = await fetch(url, {
       method,
       headers,
-      body: body as RequestInit["body"],
+      body,
       signal: controller.signal,
     });
   } catch (error) {

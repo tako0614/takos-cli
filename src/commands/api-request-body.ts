@@ -21,7 +21,7 @@ export function parseKeyValue(value: string): { key: string; value: string } {
 }
 
 export type BodyPreparation = {
-  body: unknown;
+  body: string | Uint8Array | FormData | undefined;
   contentType: string | null;
 };
 

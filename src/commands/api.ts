@@ -26,15 +26,6 @@ interface TaskDomainDefinition {
   runFollow?: boolean;
 }
 
-// ── Consolidated domains ──────────────────────────────────────────────
-//
-// Merges applied (old → new):
-//   pr, actions       → repo      (same basePath /api/repos; sub-resource patterns)
-//   memory, reminder  → context   (both basePath /api; semantically related context data)
-//   skill, tool       → capability (both basePath /api; agent capability endpoints)
-//   oauth             → auth      (basePath widened to /api to cover /api/auth/* and /api/me/oauth/*)
-//   search            → discover  (space discovery operations)
-//
 const TASK_DOMAIN_DEFINITIONS: TaskDomainDefinition[] = [
   { name: "me", description: "Tasks for /api/me", basePath: "/api/me" },
   {
@@ -117,39 +108,6 @@ const TASK_DOMAIN_DEFINITIONS: TaskDomainDefinition[] = [
     basePath: "/api",
   },
 ];
-
-// Mapping from removed domain names to their replacement and example usage.
-const MERGED_DOMAIN_REDIRECTS: Record<
-  string,
-  { replacement: string; example: string }
-> = {
-  pr: { replacement: "repo", example: "takos repo list /REPO_ID/pulls" },
-  actions: { replacement: "repo", example: "takos repo follow REPO_ID RUN_ID" },
-  memory: {
-    replacement: "context",
-    example: "takos context list /spaces/SPACE_ID/memories",
-  },
-  reminder: {
-    replacement: "context",
-    example: "takos context list /spaces/SPACE_ID/reminders",
-  },
-  skill: {
-    replacement: "capability",
-    example: "takos capability list /spaces/SPACE_ID/skills",
-  },
-  tool: {
-    replacement: "capability",
-    example: "takos capability list /spaces/SPACE_ID/tools",
-  },
-  oauth: {
-    replacement: "auth",
-    example: "takos auth list /me/oauth/connections",
-  },
-  search: {
-    replacement: "discover",
-    example: "takos discover list /spaces/SPACE_ID/search",
-  },
-};
 
 const REMOVED_HTTP_STYLE_SUBCOMMANDS = [
   "call",
@@ -410,28 +368,6 @@ function registerRemovedHttpStyleSubcommands(command: Command): void {
   }
 }
 
-function registerMergedDomainRedirects(program: Command): void {
-  for (
-    const [oldName, { replacement, example }] of Object.entries(
-      MERGED_DOMAIN_REDIRECTS,
-    )
-  ) {
-    program
-      .command(oldName, { hidden: true })
-      .allowExcessArguments(true)
-      .allowUnknownOption(true)
-      .action(() => {
-        console.log(
-          red(
-            `\`takos ${oldName}\` has been merged into \`takos ${replacement}\`.`,
-          ),
-        );
-        console.log(yellow(`Example: ${example}`));
-        cliExit(1);
-      });
-  }
-}
-
 export function registerTaskCommands(program: Command): void {
   for (const taskDomain of TASK_DOMAIN_DEFINITIONS) {
     const command = program.command(taskDomain.name).description(
@@ -460,6 +396,4 @@ export function registerTaskCommands(program: Command): void {
 
     registerRemovedHttpStyleSubcommands(command);
   }
-
-  registerMergedDomainRedirects(program);
 }

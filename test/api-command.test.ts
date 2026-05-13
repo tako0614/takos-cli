@@ -78,6 +78,20 @@ Deno.test("api command registration - omits dead project and artifact domains", 
 
   assertEquals(taskDomainNames.has("project"), false);
   assertEquals(taskDomainNames.has("artifact"), false);
+  for (
+    const name of [
+      "pr",
+      "actions",
+      "memory",
+      "reminder",
+      "skill",
+      "tool",
+      "oauth",
+      "search",
+    ]
+  ) {
+    assertEquals(taskDomainNames.has(name), false);
+  }
 });
 
 Deno.test("api command registration - exposes only the documented public surface", () => {

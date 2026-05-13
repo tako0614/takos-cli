@@ -91,26 +91,6 @@ export const VALID_RESOURCE_TYPES: ResourceCapability[] = [
   "durable-object",
 ];
 
-const RETIRED_RESOURCE_TYPE_REPLACEMENTS: Record<string, ResourceCapability> = {
-  d1: "sql",
-  r2: "object-store",
-  object_store: "object-store",
-  kv: "key-value",
-  vectorize: "vector-index",
-  vector_index: "vector-index",
-  secretRef: "secret",
-  secret_ref: "secret",
-  analyticsEngine: "analytics-engine",
-  analytics_engine: "analytics-engine",
-  analytics_store: "analytics-engine",
-  workflow_runtime: "workflow",
-  workflow_binding: "workflow",
-  durableObject: "durable-object",
-  durable_object: "durable-object",
-  durable_object_namespace: "durable-object",
-  durable_namespace: "durable-object",
-};
-
 export function resolveResourceType(input: {
   type?: string;
 }): ResourceCapability {
@@ -125,15 +105,6 @@ export function resolveResourceType(input: {
   const type = input.type.trim();
   if (VALID_RESOURCE_TYPES.includes(type as ResourceCapability)) {
     return type as ResourceCapability;
-  }
-
-  const replacement = RETIRED_RESOURCE_TYPE_REPLACEMENTS[type];
-  if (replacement) {
-    throw new Error(
-      `Invalid resource type: ${type}. Use ${replacement} instead. Valid resource types: ${
-        VALID_RESOURCE_TYPES.join(", ")
-      }`,
-    );
   }
 
   throw new Error(

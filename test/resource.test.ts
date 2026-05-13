@@ -68,13 +68,13 @@ Deno.test("resource type resolver - accepts current canonical type", () => {
   assertEquals(resolveResourceType({ type: "object-store" }), "object-store");
 });
 
-Deno.test("resource type resolver - rejects retired provider type with replacement", () => {
+Deno.test("resource type resolver - rejects non-canonical provider type", () => {
   try {
     resolveResourceType({ type: "r2" });
     throw new Error("unreachable");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     assertStringIncludes(message, "Invalid resource type: r2");
-    assertStringIncludes(message, "Use object-store instead");
+    assertStringIncludes(message, "Valid resource types:");
   }
 });

@@ -100,27 +100,33 @@ takos deploy --manifest .takosumi/manifest.yml --env staging --group GROUP_NAME
 takos deploy --manifest .takosumi/manifest.yml --env production --group GROUP_NAME
 ```
 
-`takos deploy` の local manifest path は `--manifest` で明示します。これは
-takosumi Manifest envelope (`apiVersion: "1.0"`, `kind: Manifest`) を GitOps
-deploy intent として送る入口です。 worker bundle や workflow/build artifact の
-解決は `takosumi-git init` / `takosumi-git push` 側で行います。 AppInstallation
-install は `takosumi-git install` または Takosumi Accounts install API
-を使います。runtime mode は
-`takosumi-git install --mode
-shared-cell|dedicated|self-hosted`
-で選択し、省略時は `.takosumi/app.yml` の `runtime.modes` 先頭値、Takos-first
-app では `shared-cell` を使います。 `takos install owner/repo` は current
-install path ではなく、Takosumi Accounts / takosumi-git の install flow
-を使います。 `takos install --mode ...` は runtime mode
-の誤用を避けるために認識した上で 拒否し、 `takosumi-git install --mode ...`
-へ誘導します。 `takos deploy --preview` / `--resolve-only` は current GitOps
-deploy intent では 使いません。install preview は `takosumi-git install preview`
-を使います。
+`takos deploy` は local manifest path を `--manifest` で受け取り、 takosumi
+Manifest envelope (`apiVersion: "1.0"`, `kind: Manifest`) を GitOps deploy
+intent として送ります。 worker bundle や workflow/build artifact の解決は
+`takosumi-git init` / `takosumi-git push` 側で行います。
+
+AppInstallation install は `takosumi-git install` または Takosumi Accounts
+install API を使います。runtime mode は
+`takosumi-git install --mode shared-cell|dedicated|self-hosted` で選択し、
+省略時は `.takosumi/app.yml` の `runtime.modes` 先頭値、Takos-first app では
+`shared-cell` を使います。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。
 
-## standalone 化メモ
+### Current path では使わない入口
+
+current GitOps deploy intent では以下を使いません。ローカルスクリプトを見直す
+ときは、この表を参照して current path に揃えます。
+
+- `takos install owner/repo` は current install path ではなく、 Takosumi
+  Accounts / takosumi-git の install flow を使います。
+- `takos install --mode ...` は runtime mode の誤用を避けるために認識した上で
+  拒否し、 `takosumi-git install --mode ...` へ誘導します。
+- `takos deploy --preview` / `--resolve-only` は使いません。 install preview は
+  `takosumi-git install preview` を使います。
+
+## 開発メモ
 
 - この repo は `takos/` space への hard dependency を避けるため、CLI が読む app
   manifest contract を `src/lib/app-manifest-contract/` に持ちます。

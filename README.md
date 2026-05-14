@@ -19,7 +19,7 @@ repository には CLI 本体、テスト、そして `takos/` monorepo に依存
 - `src/`: CLI 実装
 - `test/`: CLI テスト
 - `src/lib/app-manifest-contract/`: CLI が deploy 時に読む app manifest contract
-- `shims/`: packaging 互換用 shim
+- `shims/`: packaging bridge shim
 
 ## 前提
 
@@ -124,11 +124,10 @@ deploy intent では 使いません。install preview は `takosumi-git install
 
 - この repo は `takos/` space への hard dependency を避けるため、CLI が読む app
   manifest contract を `src/lib/app-manifest-contract/` に持ちます。
-- standalone packaging が完了するまで、runtime image 互換のために CLI source は
-  ecosystem root の `takos-cli/` checkout から runtime image build context
-  に渡します。
+- standalone packaging が完了するまで、runtime image build は CLI source を
+  ecosystem root の `takos-cli/` checkout から build context に渡します。
 - upstream の manifest schema が変わったら、この repo の CLI-local contract も
-  同じ change window で更新してください。
+  同じ change set で更新してください。
 
 ## License
 

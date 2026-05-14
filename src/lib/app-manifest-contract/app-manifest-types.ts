@@ -65,7 +65,7 @@ export type ScheduleTrigger = {
 
 export type QueueTrigger = {
   /**
-   * Queue runtime binding name on this worker. Prefer this for manifest-owned
+   * message queue runtime binding name on this worker. Prefer this for manifest-owned
    * apps because deploy can resolve the bound resource to the backing queue.
    */
   binding?: string;
@@ -91,6 +91,11 @@ export type AppConsume = {
   as?: string;
   request?: Record<string, unknown>;
   inject?: AppConsumeInject;
+  // Convenience shortcut: env mapping injected into the consumer workload's env.
+  // Forwarded verbatim by the deployment pipeline so downstream resolvers
+  // (e.g. `previewServiceConsumeEnvVars`) can read it directly without going
+  // through `inject.env`.
+  env?: Record<string, string>;
 };
 
 export type AppConsumeInject = {
@@ -192,6 +197,10 @@ export type AppPublication = {
   display?: AppPublicationDisplay;
   auth?: AppPublicationAuth;
   spec?: Record<string, unknown>;
+  // Convenience shortcut: the public URL path that bound publications expose.
+  // Preserved as a pass-through field so route binding can resolve it
+  // downstream when `outputs` is not used.
+  path?: string;
 };
 
 export type AppPublicationOutputKind = "url" | "string" | "secret";
@@ -217,12 +226,19 @@ export type AppPublicationAuth = {
 
 // --- Environment overrides ---
 
-export type AppManifestOverride = Partial<
-  Pick<
-    AppManifest,
-    "compute" | "routes" | "publish" | "env" | "resources"
+// Override entries hold raw resource records that are re-validated against
+// `AppResource` only after merging with the base manifest at apply time
+// (see `group-state.ts`), so the parsed shape is intentionally loose here.
+export type AppManifestOverride =
+  & Partial<
+    Pick<
+      AppManifest,
+      "compute" | "routes" | "publish" | "env"
+    >
   >
->;
+  & {
+    resources?: Record<string, unknown>;
+  };
 
 // --- Root manifest ---
 

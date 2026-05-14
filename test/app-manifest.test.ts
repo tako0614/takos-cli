@@ -84,7 +84,7 @@ compute:
   gateway:
     kind: worker
     consume:
-      - publication: takos.api-key
+      - publication: example.api-key
         inject:
           env:
             endpoint: TAKOS_API_URL
@@ -126,7 +126,7 @@ Deno.test("deploy manifest - loads the flat public manifest surface", async () =
       "attached-container",
     );
     assertEquals(manifest.compute.gateway.consume, [{
-      publication: "takos.api-key",
+      publication: "example.api-key",
       inject: { env: { endpoint: "TAKOS_API_URL" } },
     }]);
     assertEquals(manifest.routes, [
@@ -353,7 +353,7 @@ compute:
     await assertRejects(
       () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
       Error,
-      "compute.gateway.build is not part of the Takos app manifest contract",
+      "compute.gateway.build is no longer supported by the Takos app manifest parser",
     );
   });
 });
@@ -479,7 +479,7 @@ overrides:
     await assertRejects(
       () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
       Error,
-      "overrides.compute.gateway.build is not part of the Takos app manifest contract",
+      "overrides.compute.gateway.build is no longer supported by the Takos app manifest parser",
     );
   });
 });

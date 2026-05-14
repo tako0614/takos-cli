@@ -43,12 +43,14 @@ import {
   validateReadinessPath,
   validateServiceScaling,
 } from "../app-manifest-validation.ts";
+import { buildMetadataDisabledMessage } from "./build-metadata.ts";
 import { validateSemver } from "./parse-common.ts";
-import { retiredBuildDisabledMessage } from "./retired-build.ts";
 import { parseCompute } from "./parse-compute.ts";
 import { parsePublish } from "./parse-publish.ts";
 import { parseResources } from "./parse-resources.ts";
 import { parseRoutes } from "./parse-routes.ts";
+
+export type ParseAppManifestOptions = Record<string, never>;
 
 const TOP_LEVEL_FIELDS = new Set([
   "name",
@@ -85,7 +87,9 @@ function assertAllowedFields(
   }
 }
 
-function assertAllowedTopLevelFields(record: Record<string, unknown>): void {
+export function assertAllowedTopLevelFields(
+  record: object,
+): void {
   const envelopeFields = ["apiVersion", "kind", "metadata", "spec"];
   const hasEnvelopeField = envelopeFields.some((field) =>
     Object.hasOwn(record, field)
@@ -465,7 +469,7 @@ function parseOverrideComputeEntry(
   if (icon) result.icon = icon;
 
   if (record.build != null) {
-    throw new Error(retiredBuildDisabledMessage(`${prefix}.build`));
+    throw new Error(buildMetadataDisabledMessage(`${prefix}.build`));
   }
 
   const image = validateDigestPinnedImageRef(
@@ -686,7 +690,9 @@ function parseOverrides(
     );
     const entry: AppManifestOverride = {};
     if (envRecord.compute != null) {
-      entry.compute = parseOverrideCompute(envRecord.compute) as Record<
+      entry.compute = parseOverrideCompute(
+        envRecord.compute,
+      ) as Record<
         string,
         AppCompute
       >;
@@ -712,7 +718,7 @@ function parseOverrides(
       if (envMap) entry.env = envMap;
     }
     if (envRecord.resources != null) {
-      entry.resources = parseOverrideResources(envRecord.resources) as never;
+      entry.resources = parseOverrideResources(envRecord.resources);
     }
     if (Object.keys(entry).length > 0) {
       result[envName] = entry;
@@ -721,7 +727,10 @@ function parseOverrides(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-export function parseAppManifestYaml(raw: string): AppManifest {
+export function parseAppManifestYaml(
+  raw: string,
+  _options: ParseAppManifestOptions = {},
+): AppManifest {
   const parsed = YAML.parse(raw);
   const record = asRecord(parsed);
 
@@ -777,3 +786,4 @@ export const parseAppManifestText = parseAppManifestYaml;
 export { parseCompute } from "./parse-compute.ts";
 export { parsePublish } from "./parse-publish.ts";
 export { parseRoutes } from "./parse-routes.ts";
+export { assertManifestInputDoesNotUseBuildMetadata } from "./build-metadata.ts";

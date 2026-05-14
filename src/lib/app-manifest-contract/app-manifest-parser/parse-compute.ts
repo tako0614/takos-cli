@@ -40,7 +40,7 @@ import {
   validateReadinessPath,
   validateServiceScaling,
 } from "../app-manifest-validation.ts";
-import { retiredBuildDisabledMessage } from "./retired-build.ts";
+import { buildMetadataDisabledMessage } from "./build-metadata.ts";
 
 const COMPUTE_FIELDS = new Set([
   "kind",
@@ -394,15 +394,21 @@ function parseConsume(
       `${consumePrefix}.inject`,
     );
     const alias = asString(record.as, `${consumePrefix}.as`);
+    const publication = asRequiredString(
+      record.publication,
+      `${consumePrefix}.publication`,
+    );
+    if (publication.startsWith("takos.")) {
+      throw new Error(
+        `${consumePrefix}.publication '${publication}' is not supported by the app manifest contract; reserved Takos consumes are retired, use AppGrant/AppBinding credentials from the operator account plane`,
+      );
+    }
     const request = parseConsumeRequest(
       record.request,
       `${consumePrefix}.request`,
     );
     return {
-      publication: asRequiredString(
-        record.publication,
-        `${consumePrefix}.publication`,
-      ),
+      publication,
       ...(alias ? { as: alias } : {}),
       ...(request ? { request } : {}),
       ...(inject ? { inject } : {}),
@@ -650,7 +656,7 @@ function detectComputeKind(
     );
   }
   if (hasBuild) {
-    throw new Error(retiredBuildDisabledMessage(`${prefix}.build`));
+    throw new Error(buildMetadataDisabledMessage(`${prefix}.build`));
   }
   if (explicitKind === "worker") {
     return assertKind("worker");

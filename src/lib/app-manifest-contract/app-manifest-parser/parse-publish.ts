@@ -195,7 +195,7 @@ export function parsePublicationEntry(
   const publisher = asString(record.publisher, `${prefix}.publisher`);
   if (publisher === "takos") {
     throw new Error(
-      `${prefix}.publisher 'takos' is not supported in app manifests; use AppGrant/AppBinding credentials from the operator account plane instead`,
+      `${prefix}.publisher 'takos' is not supported in app manifests; use AppGrant/AppBinding credentials from Takosumi Accounts instead`,
     );
   }
   const outputs = parsePublicationOutputs(prefix, record.outputs);

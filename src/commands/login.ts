@@ -10,6 +10,7 @@ import {
 } from "../lib/config.ts";
 import { api } from "../lib/api.ts";
 import { cliExit } from "../lib/command-exit.ts";
+import { normalizeBaseUrl } from "../lib/cli-utils.ts";
 
 const ACCOUNTS_TOKEN_PATH = "/v1/account/tokens";
 const ACCOUNTS_PAT_SCOPES = ["read", "write", "admin"] as const;
@@ -41,10 +42,6 @@ function hasWhitespaceOrControlCharacter(value: string): boolean {
     if (codePoint <= 0x20 || codePoint === 0x7f) return true;
   }
   return false;
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, "");
 }
 
 function parsePatScopes(value?: string): AccountsPatScope[] {

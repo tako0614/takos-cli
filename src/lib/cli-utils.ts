@@ -11,6 +11,14 @@ import { cliExit } from "./command-exit.ts";
 import { getConfig } from "./config.ts";
 
 /**
+ * Trim whitespace and strip any trailing slashes from a base URL.
+ * Used to canonicalise endpoint URLs before validation / request building.
+ */
+export function normalizeBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}
+
+/**
  * Resolve the Cloudflare account ID from an explicit override,
  * environment variables, or exit with an error.
  */

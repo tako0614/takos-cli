@@ -7,6 +7,7 @@ import {
   validateApiUrl,
 } from "../lib/config.ts";
 import { CliCommandExit, cliExit } from "../lib/command-exit.ts";
+import { normalizeBaseUrl } from "../lib/cli-utils.ts";
 
 type InstallationSource = {
   type?: string;
@@ -60,10 +61,6 @@ type AccountsCommandOptions = {
 type InstallationListOptions = AccountsCommandOptions & {
   space?: string;
 };
-
-function normalizeBaseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, "");
-}
 
 function resolveAccountsUrl(value?: string): string {
   const raw = value ?? Deno.env.get("TAKOSUMI_ACCOUNTS_URL");

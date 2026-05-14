@@ -55,6 +55,70 @@ export function getStateFilePath(stateDir: string, group: string): string {
 }
 
 /**
+ * Validate a parsed JSON value as a TakosState envelope.
+ *
+ * The shape is asserted structurally so a corrupted state file fails fast
+ * with a clear error instead of producing a typed handle that explodes
+ * later inside resource bookkeeping.
+ */
+function parseStateFile(value: unknown, filePath: string): TakosState {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`state file is not a JSON object: ${filePath}`);
+  }
+  const record = value as Record<string, unknown>;
+  const requireRecord = (key: keyof TakosState): Record<string, unknown> => {
+    const v = record[key as string];
+    if (v === null || typeof v !== "object" || Array.isArray(v)) {
+      throw new Error(
+        `state file ${filePath} is missing or has invalid '${
+          String(key)
+        }' (expected object)`,
+      );
+    }
+    return v as Record<string, unknown>;
+  };
+  if (typeof record.version !== "number") {
+    throw new Error(
+      `state file ${filePath} is missing or has invalid 'version' (expected number)`,
+    );
+  }
+  if (typeof record.env !== "string") {
+    throw new Error(
+      `state file ${filePath} is missing or has invalid 'env' (expected string)`,
+    );
+  }
+  if (typeof record.group !== "string") {
+    throw new Error(
+      `state file ${filePath} is missing or has invalid 'group' (expected string)`,
+    );
+  }
+  if (typeof record.groupName !== "string") {
+    throw new Error(
+      `state file ${filePath} is missing or has invalid 'groupName' (expected string)`,
+    );
+  }
+  if (typeof record.updatedAt !== "string") {
+    throw new Error(
+      `state file ${filePath} is missing or has invalid 'updatedAt' (expected string)`,
+    );
+  }
+  // Sub-trees keep their structural shape from disk; deeper validation lives
+  // in the resource-specific code paths that consume each map.
+  return {
+    version: record.version,
+    env: record.env,
+    group: record.group,
+    groupName: record.groupName,
+    updatedAt: record.updatedAt,
+    resources: requireRecord("resources") as TakosState["resources"],
+    workers: requireRecord("workers") as TakosState["workers"],
+    containers: requireRecord("containers") as TakosState["containers"],
+    services: requireRecord("services") as TakosState["services"],
+    routes: requireRecord("routes") as TakosState["routes"],
+  };
+}
+
+/**
  * state.{group}.json を読み込む。ファイルがなければ null を返す（初回 apply）。
  */
 export async function readStateFromFile(
@@ -64,7 +128,7 @@ export async function readStateFromFile(
   const filePath = getStateFilePath(stateDir, group);
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw) as TakosState;
+    return parseStateFile(JSON.parse(raw), filePath);
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return null;

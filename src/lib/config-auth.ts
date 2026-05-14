@@ -38,9 +38,26 @@ function getConfigFile(): string {
   return join(getConfigDir(), "config.json");
 }
 
+function parseConfStore(value: unknown): ConfStore {
+  if (
+    value === null || typeof value !== "object" || Array.isArray(value)
+  ) {
+    return {};
+  }
+  const record = value as Record<string, unknown>;
+  const store: ConfStore = {};
+  if (typeof record.token === "string") {
+    store.token = record.token;
+  }
+  if (typeof record.apiUrl === "string") {
+    store.apiUrl = record.apiUrl;
+  }
+  return store;
+}
+
 function readConfStore(): ConfStore {
   try {
-    return JSON.parse(readFileSync(getConfigFile(), "utf-8")) as ConfStore;
+    return parseConfStore(JSON.parse(readFileSync(getConfigFile(), "utf-8")));
   } catch {
     return {};
   }

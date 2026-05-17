@@ -114,18 +114,6 @@ install API を使います。runtime mode は
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。
 
-### Current path では使わない入口
-
-current GitOps deploy intent では以下を使いません。ローカルスクリプトを見直す
-ときは、この表を参照して current path に揃えます。
-
-- `takos install owner/repo` は current install path ではなく、 Takosumi
-  Accounts / takosumi-git の install flow を使います。
-- `takos install --mode ...` は runtime mode の誤用を避けるために認識した上で
-  拒否し、 `takosumi-git install --mode ...` へ誘導します。
-- `takos deploy --preview` / `--resolve-only` は使いません。 install preview は
-  `takosumi-git install preview` を使います。
-
 ## 開発メモ
 
 - この repo は `takos/` space への hard dependency を避けるため、CLI が読む app

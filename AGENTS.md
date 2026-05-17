@@ -23,7 +23,7 @@ command / digest-pinned image manifest を Takos app gateway の deploy-intent A
   explicit path required)
 - Takos service implementation source への依存 (`takos/app/` の implementation
   は import しない)
-- workflow / git event / artifact build (`takosumi-git` の責務)
+- workflow / git event / artifact build (Takosumi 本体 `packages/installer/` の責務)
 - kernel manifest direct apply (`takosumi` CLI の責務)
 
 ## 隣接 product との contract

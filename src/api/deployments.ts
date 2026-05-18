@@ -1,15 +1,16 @@
 /**
  * Deploy-intent API client for the current Takos CLI surface.
  *
- * The CLI writes local-manifest GitOps deploy intents through the browser/CLI
+ * The CLI writes local AppSpec GitOps deploy intents through the browser/CLI
  * gateway. App lifecycle operations are owned by Takosumi Accounts
- * AppInstallation APIs and takosumi-git, not Deployment follow-up routes.
+ * AppInstallation APIs and the Takosumi installer, not Deployment follow-up
+ * routes.
  */
 
 import { api } from "../lib/api.ts";
 
 export interface CreateDeploymentRequest {
-  manifest?: unknown;
+  appSpec?: unknown;
   mode: "apply";
   group?: string;
   env?: string;
@@ -41,7 +42,7 @@ function withSpace(
 
 /**
  * POST /api/public/v1/deployments
- * Writes a GitOps deploy intent from an explicit local manifest.
+ * Writes a GitOps deploy intent from an explicit local AppSpec.
  */
 export function createDeployment(
   spaceId: string,

@@ -10,8 +10,8 @@ repository には CLI 本体、テスト、そして `takos/` monorepo に依存
 
 - Takos API 向けの認証と endpoint 切り替え
 - `space`、`repo`、`thread`、`run`、`resource` などの task-oriented API command
-- digest-pinned image manifest を Takos app gateway の deploy-intent API に送る
-  deploy command
+- `.takosumi.yml` AppSpec を Takos app gateway の GitOps deploy-intent API
+  に送る deploy command
 - backend-neutral deploy client と API request formatting
 
 ## Repository Layout
@@ -93,23 +93,22 @@ takos endpoint use prod
 takos endpoint show
 ```
 
-deploy manifest ベースの deploy flow:
+AppSpec ベースの deploy intent flow:
 
 ```bash
-takos deploy --manifest .takosumi/manifest.yml --env staging --group GROUP_NAME
-takos deploy --manifest .takosumi/manifest.yml --env production --group GROUP_NAME
+takos deploy --app-spec .takosumi.yml --env staging --group GROUP_NAME
+takos deploy --app-spec .takosumi.yml --env production --group GROUP_NAME
 ```
 
-`takos deploy` は local manifest path を `--manifest` で受け取り、 takosumi
-Manifest envelope (`apiVersion: "1.0"`, `kind: Manifest`) を GitOps deploy
-intent として送ります。 worker bundle や workflow/build artifact の解決は
-`takosumi-git init` / `takosumi-git push` 側で行います。
+`takos deploy` は local AppSpec path を `--app-spec` で受け取り、
+`.takosumi.yml` (`apiVersion: "takosumi.dev/v1"`, `kind: "App"`) を GitOps
+deploy intent として 送ります。 worker bundle や build artifact の解決は
+Takosumi installer / GitOps deploy-intent flow 側で行います。
 
-AppInstallation install は `takosumi-git install` または Takosumi Accounts
-install API を使います。runtime mode は
-`takosumi-git install --mode shared-cell|dedicated|self-hosted` で選択し、
-省略時は `.takosumi/app.yml` の `runtime.modes` 先頭値、Takos-first app では
-`shared-cell` を使います。
+AppInstallation install は `takosumi install` または Takosumi Accounts install
+API を使います。dry-run で返った `expected.commit` / `expected.manifestDigest`
+を apply 時に pin します。runtime mode の選択は Takos CLI ではなく operator
+account plane / Installation materialize flow の責務です。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。

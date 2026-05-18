@@ -14,52 +14,60 @@ export type DeployCommandOptions = {
   refType?: "branch" | "tag" | "commit";
   group?: string;
   env?: string;
-  manifest?: string;
+  appSpec?: string;
   preview?: boolean;
   resolveOnly?: boolean;
   autoApprove?: boolean;
   json?: boolean;
 };
 
-type KernelManifest = Record<string, unknown>;
+type AppSpec = Record<string, unknown>;
 
-async function loadKernelManifest(
-  manifestOption: string | undefined,
-): Promise<{ manifest: KernelManifest; manifestPath: string }> {
-  if (!manifestOption?.trim()) {
-    console.log(red("Local deploys require --manifest <path>."));
+async function loadAppSpec(
+  appSpecOption: string | undefined,
+): Promise<{ appSpec: AppSpec; appSpecPath: string }> {
+  if (!appSpecOption?.trim()) {
+    console.log(red("Local deploys require --app-spec <path>."));
     cliExit(1);
   }
-  const manifestPath = manifestOption.trim();
+  const appSpecPath = appSpecOption.trim();
 
-  let manifest: unknown;
+  let appSpec: unknown;
   try {
-    const raw = await Deno.readTextFile(manifestPath);
-    manifest = YAML.parse(raw);
+    const raw = await Deno.readTextFile(appSpecPath);
+    appSpec = YAML.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.log(red(`Invalid manifest: ${message}`));
+    console.log(red(`Invalid AppSpec: ${message}`));
     cliExit(1);
   }
 
-  if (!isKernelManifest(manifest)) {
+  if (!isAppSpec(appSpec)) {
     console.log(
       red(
-        'Deploy manifest must be a takosumi Manifest envelope (`apiVersion: "1.0"`, `kind: Manifest`, `resources: []`).',
+        'Deploy AppSpec must be `.takosumi.yml` (`apiVersion: "takosumi.dev/v1"`, `kind: "App"`, `metadata`, `components`).',
       ),
     );
     cliExit(1);
   }
 
-  return { manifest, manifestPath };
+  return { appSpec, appSpecPath };
 }
 
-function isKernelManifest(value: unknown): value is KernelManifest {
+function isAppSpec(value: unknown): value is AppSpec {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return record.apiVersion === "1.0" &&
-    record.kind === "Manifest" &&
-    Array.isArray(record.resources);
+  const metadata = record.metadata;
+  return record.apiVersion === "takosumi.dev/v1" &&
+    record.kind === "App" &&
+    metadata !== null &&
+    typeof metadata === "object" &&
+    !Array.isArray(metadata) &&
+    typeof (metadata as Record<string, unknown>).id === "string" &&
+    typeof (metadata as Record<string, unknown>).name === "string" &&
+    record.components !== null &&
+    typeof record.components === "object" &&
+    !Array.isArray(record.components);
 }
 
 function pickMode(options: DeployCommandOptions): "apply" {
@@ -72,7 +80,7 @@ function pickMode(options: DeployCommandOptions): "apply" {
   if (options.preview || options.resolveOnly) {
     console.log(
       red(
-        "takos deploy only writes GitOps deploy intents in apply mode. Use takosumi-git install preview for install previews.",
+        "takos deploy only writes GitOps deploy intents in apply mode. Use takosumi install dry-run for Installation dry-runs.",
       ),
     );
     cliExit(1);
@@ -99,9 +107,9 @@ export async function runDeploy(
     cliExit(1);
   }
 
-  if (usingRepositoryUrl && options.manifest) {
+  if (usingRepositoryUrl && options.appSpec) {
     console.log(
-      red("--manifest cannot be used together with a repository URL."),
+      red("--app-spec cannot be used together with a repository URL."),
     );
     cliExit(1);
   }
@@ -109,32 +117,32 @@ export async function runDeploy(
   const spaceId = resolveSpaceId(options.space);
   const groupName = options.group?.trim();
 
-  let manifestPath: string | undefined;
-  let inlineManifest: unknown;
+  let appSpecPath: string | undefined;
+  let inlineAppSpec: unknown;
 
   if (usingRepositoryUrl) {
     console.log(
       red(
-        "Repository URL deploy is not a current Takos CLI entry point. Use `takosumi-git install` for AppInstallation lifecycle or `takosumi-git push` for source-driven deploys.",
+        "Repository URL deploy is not a current Takos CLI entry point. Use `takosumi install` for AppInstallation lifecycle or the Takos GitOps deploy-intent flow for source-driven deploys.",
       ),
     );
     cliExit(1);
   } else {
-    const loaded = await loadKernelManifest(options.manifest);
-    manifestPath = loaded.manifestPath;
-    inlineManifest = loaded.manifest;
+    const loaded = await loadAppSpec(options.appSpec);
+    appSpecPath = loaded.appSpecPath;
+    inlineAppSpec = loaded.appSpec;
   }
 
   const requestBody: CreateDeploymentRequest = {
     mode,
     env,
-    ...(inlineManifest ? { manifest: inlineManifest } : {}),
+    ...(inlineAppSpec ? { appSpec: inlineAppSpec } : {}),
     ...(groupName ? { group: groupName } : {}),
   };
 
   // ── Confirmation prompt (apply mode only) ─────────────────────────
   if (!options.autoApprove && !options.json) {
-    const label = `local deploy manifest ${manifestPath}`;
+    const label = `local AppSpec ${appSpecPath}`;
     if (!(await confirmPrompt(`Deploy ${label} to ${env}?`))) {
       console.log(dim("Deploy cancelled."));
       return;
@@ -144,7 +152,7 @@ export async function runDeploy(
   if (!options.json) {
     console.log("");
     console.log(cyan(`Mode: ${describeMode()}`));
-    if (manifestPath) console.log(`  Manifest:    ${manifestPath}`);
+    if (appSpecPath) console.log(`  AppSpec:     ${appSpecPath}`);
     console.log(`  Env:         ${env}`);
     if (groupName) console.log(`  Group:       ${groupName}`);
     console.log("");
@@ -198,11 +206,11 @@ export function registerDeployCommand(program: Command): void {
   program
     .command("deploy")
     .description(
-      "Write a GitOps deploy intent from an explicit local manifest",
+      "Write a GitOps deploy intent from an explicit local AppSpec",
     )
     .argument(
       "[repositoryUrl]",
-      "Retired repository URL deploy source; use takosumi-git",
+      "Retired repository URL deploy source; use takosumi install",
     )
     .option("--space <id>", "Target space ID")
     .option("--env <env>", "Target environment", "staging")
@@ -211,8 +219,8 @@ export function registerDeployCommand(program: Command): void {
       "Override the manifest name used as the target group",
     )
     .option(
-      "--manifest <path>",
-      "Local deploy manifest path",
+      "--app-spec <path>",
+      "Local `.takosumi.yml` AppSpec path",
     )
     .option("--ref <ref>", "Branch / tag / commit (repository URL only)")
     .option(

@@ -110,10 +110,10 @@ overrides:
 
 Deno.test("deploy manifest - loads the flat public manifest surface", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": flatManifest,
+    "manifest.yml": flatManifest,
   }, async (repoDir) => {
     const manifest = await loadAppManifest(
-      path.join(repoDir, ".takosumi/manifest.yml"),
+      path.join(repoDir, "manifest.yml"),
     );
 
     assertEquals(manifest.name, "sample-app");
@@ -165,7 +165,7 @@ Deno.test("deploy manifest - loads the flat public manifest surface", async () =
 
 Deno.test("deploy manifest - rejects retired publish path", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: retired-publish-path
 publish:
   - name: gateway-ui
@@ -178,7 +178,7 @@ compute:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "publish[0].path is not supported by the publish/consume contract",
     );
@@ -187,7 +187,7 @@ compute:
 
 Deno.test("deploy manifest - rejects retired consume env alias", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: retired-consume-env
 compute:
   gateway:
@@ -199,7 +199,7 @@ compute:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "compute.gateway.consume[0].env is not supported by the app manifest contract",
     );
@@ -208,7 +208,7 @@ compute:
 
 Deno.test("deploy manifest - rejects retired publications alias", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: retired-publications
 publications:
   - name: gateway-ui
@@ -227,7 +227,7 @@ routes:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "publications is not supported by the app manifest contract",
     );
@@ -236,7 +236,7 @@ routes:
 
 Deno.test("deploy manifest - rejects retired route output alias", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: retired-route-output
 publish:
   - name: gateway-ui
@@ -251,7 +251,7 @@ compute:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "publish[0].outputs.default.route is not supported by the publish/consume contract",
     );
@@ -260,7 +260,7 @@ compute:
 
 Deno.test("deploy manifest - rejects retired publication title alias", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: retired-title
 publish:
   - name: gateway-ui
@@ -280,7 +280,7 @@ routes:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "publish[0].title is not supported by the publish/consume contract",
     );
@@ -289,7 +289,7 @@ routes:
 
 Deno.test("deploy manifest - rejects platform-owned publisher", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: platform-owned-publisher
 publish:
   - name: takos-api
@@ -310,7 +310,7 @@ routes:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "publish[0].publisher 'takos' is not supported in app manifests",
     );
@@ -319,7 +319,7 @@ routes:
 
 Deno.test("deploy manifest - rejects unsupported envelope manifests", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 apiVersion: example.com/v1
 kind: App
 metadata:
@@ -329,7 +329,7 @@ spec:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "Takos app manifests use the flat contract",
     );
@@ -338,7 +338,7 @@ spec:
 
 Deno.test("deploy manifest - rejects retired build metadata with current guidance", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: retired-build-app
 compute:
   gateway:
@@ -351,7 +351,7 @@ compute:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "compute.gateway.build is no longer supported by the Takos app manifest parser",
     );
@@ -360,7 +360,7 @@ compute:
 
 Deno.test("deploy manifest - rejects unsupported storage", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: sample-app
 compute:
   gateway:
@@ -372,7 +372,7 @@ storage:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "storage is not supported by the app manifest contract",
     );
@@ -381,7 +381,7 @@ storage:
 
 Deno.test("deploy manifest - rejects provider in compute", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: provider-app
 compute:
   api:
@@ -391,7 +391,7 @@ compute:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "compute.api.provider is not supported by the app manifest contract",
     );
@@ -400,7 +400,7 @@ compute:
 
 Deno.test("deploy manifest - rejects unpinned service images", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: unpinned-image
 compute:
   api:
@@ -409,7 +409,7 @@ compute:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "compute.api.image must be a digest-pinned image ref",
     );
@@ -418,7 +418,7 @@ compute:
 
 Deno.test("deploy manifest - accepts explicit worker compute without build metadata", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: explicit-worker
 version: 1.0.0
 compute:
@@ -427,7 +427,7 @@ compute:
 `,
   }, async (repoDir) => {
     const manifest = await loadAppManifest(
-      path.join(repoDir, ".takosumi/manifest.yml"),
+      path.join(repoDir, "manifest.yml"),
     );
 
     assertEquals(
@@ -439,7 +439,7 @@ compute:
 
 Deno.test("deploy manifest - validate accepts explicit worker manifests", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: explicit-worker
 version: 1.0.0
 compute:
@@ -458,7 +458,7 @@ compute:
 
 Deno.test("deploy manifest - rejects override build metadata with current guidance", async () => {
   await withTempRepo({
-    ".takosumi/manifest.yml": `
+    "manifest.yml": `
 name: retired-override-build
 version: 1.0.0
 compute:
@@ -477,7 +477,7 @@ overrides:
 `,
   }, async (repoDir) => {
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, ".takosumi/manifest.yml")),
+      () => loadAppManifest(path.join(repoDir, "manifest.yml")),
       Error,
       "overrides.compute.gateway.build is no longer supported by the Takos app manifest parser",
     );

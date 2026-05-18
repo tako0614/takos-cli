@@ -2,7 +2,7 @@
  * `takos install <packageRef>`
  *
  * Takos CLI does not own AppInstallation creation. Installable App lifecycle
- * is owned by Takosumi Accounts and the takosumi-git installer.
+ * is owned by Takosumi Accounts and the Takosumi installer API.
  */
 
 import type { Command } from "commander";
@@ -62,10 +62,12 @@ export function runInstall(
     cliExit(1);
   }
 
-  const modeSuffix = installMode ? ` --mode ${installMode}` : "";
+  const modeNote = installMode
+    ? ` Runtime mode '${installMode}' is selected by the operator account plane, not by takos install.`
+    : "";
   console.log(
     red(
-      `takos install is not the current AppInstallation entry point. Use \`takosumi-git install${modeSuffix}\` or Takosumi Accounts install APIs.`,
+      `takos install is not the current AppInstallation entry point. Use \`takosumi install dry-run <source> --space <id>\`, then \`takosumi install <source> --space <id> --expected-commit <commit> --expected-manifest-digest <digest>\`, or Takosumi Accounts install APIs.${modeNote}`,
     ),
   );
   cliExit(1);
@@ -77,18 +79,18 @@ export function registerInstallCommand(program: Command): void {
     .description("Explain the current AppInstallation install entry points")
     .option(
       "--mode <mode>",
-      "Forward this runtime mode in the takosumi-git guidance: shared-cell | dedicated | self-hosted",
+      "Validate this runtime mode and explain that mode selection belongs to the operator account plane: shared-cell | dedicated | self-hosted",
     )
     .addHelpText(
       "after",
       `
 Current install path:
   takos install intentionally exits nonzero. AppInstallation creation is owned
-  by Takosumi Accounts and the takosumi-git installer.
+  by Takosumi Accounts and the Takosumi installer API.
 
 Use:
-  takosumi-git install preview <git-url> --ref <tag> --json
-  takosumi-git install apply <git-url> --ref <tag> --accounts-url <url> --space-id <id> --cost-ack
+  takosumi install dry-run git:https://github.com/example/app.git#v1.2.3 --space <id> --remote <kernel-url>
+  takosumi install git:https://github.com/example/app.git#v1.2.3 --space <id> --expected-commit <commit> --expected-manifest-digest <digest> --remote <kernel-url>
 `,
     )
     .action(async (packageRef: string, options: InstallCommandOptions) => {

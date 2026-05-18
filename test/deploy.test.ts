@@ -7,16 +7,17 @@ import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerDeployCommand } from "../src/commands/deploy.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 
-const localManifestYaml = `apiVersion: "1.0"
-kind: Manifest
+const localAppSpecYaml = `apiVersion: takosumi.dev/v1
+kind: App
 metadata:
-  name: sample-app
-resources:
-  - shape: web-service@v1
-    name: gateway
-    spec:
-      image: ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333
-      port: 8080
+  id: sample-app
+  name: Sample App
+components:
+  gateway:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/gateway.mjs
 `;
 
 async function withTempProject<T>(
@@ -24,10 +25,9 @@ async function withTempProject<T>(
 ): Promise<T> {
   const originalCwd = Deno.cwd();
   const projectDir = await Deno.makeTempDir({ prefix: "takos-deploy-" });
-  await fs.mkdir(path.join(projectDir, ".takosumi"), { recursive: true });
   await fs.writeFile(
-    path.join(projectDir, ".takosumi", "manifest.yml"),
-    localManifestYaml,
+    path.join(projectDir, ".takosumi.yml"),
+    localAppSpecYaml,
     "utf8",
   );
   Deno.chdir(projectDir);
@@ -111,7 +111,7 @@ Deno.test("deploy command - rejects repository URL deploy before the API call", 
 });
 
 Deno.test(
-  "deploy command - writes a GitOps intent from a local manifest",
+  "deploy command - writes a GitOps intent from a local AppSpec",
   async () => {
     const fetchStub = stub(globalThis, "fetch", (input, init) => {
       const request = init as RequestInit | undefined;
@@ -137,8 +137,8 @@ Deno.test(
           "node",
           "takos",
           "deploy",
-          "--manifest",
-          path.join(projectDir, ".takosumi", "manifest.yml"),
+          "--app-spec",
+          path.join(projectDir, ".takosumi.yml"),
           "--group",
           "demo-group",
           "--auto-approve",
@@ -152,8 +152,8 @@ Deno.test(
         assertEquals(body.mode, "apply");
         assertEquals(body.group, "demo-group");
         assertEquals(
-          body.manifest.resources[0].spec.image,
-          "ghcr.io/example/gateway@sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          body.appSpec.components.gateway.kind,
+          "worker",
         );
         assertEquals("source" in body, false);
         assertStringIncludes(logOutput(logSpy.calls), "Deploy intent accepted");
@@ -204,8 +204,8 @@ Deno.test(
           "node",
           "takos",
           "deploy",
-          "--manifest",
-          path.join(projectDir, ".takosumi", "manifest.yml"),
+          "--app-spec",
+          path.join(projectDir, ".takosumi.yml"),
           "--group",
           "demo-group",
           "--json",
@@ -229,7 +229,7 @@ Deno.test(
   },
 );
 
-Deno.test("deploy command - rejects non-kernel manifests before the API call", async () => {
+Deno.test("deploy command - rejects non-AppSpec manifests before the API call", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -241,7 +241,7 @@ Deno.test("deploy command - rejects non-kernel manifests before the API call", a
   try {
     await withTempProject(async (projectDir) => {
       await fs.writeFile(
-        path.join(projectDir, ".takosumi", "manifest.yml"),
+        path.join(projectDir, ".takosumi.yml"),
         `name: worker-app
 compute:
   gateway:
@@ -256,8 +256,8 @@ compute:
             "node",
             "takos",
             "deploy",
-            "--manifest",
-            path.join(projectDir, ".takosumi", "manifest.yml"),
+            "--app-spec",
+            path.join(projectDir, ".takosumi.yml"),
             "--group",
             "demo-group",
             "--auto-approve",
@@ -268,7 +268,7 @@ compute:
     assertSpyCalls(fetchStub, 0);
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "Deploy manifest must be a takosumi Manifest envelope",
+      "Deploy AppSpec must be `.takosumi.yml`",
     );
   } finally {
     fetchStub.restore();
@@ -277,7 +277,7 @@ compute:
   }
 });
 
-Deno.test("deploy command - rejects repository URLs combined with --manifest", async () => {
+Deno.test("deploy command - rejects repository URLs combined with --app-spec", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -295,8 +295,8 @@ Deno.test("deploy command - rejects repository URLs combined with --manifest", a
           "takos",
           "deploy",
           "https://github.com/acme/demo.git",
-          "--manifest",
-          ".takosumi/manifest.yml",
+          "--app-spec",
+          ".takosumi.yml",
           "--auto-approve",
         ], { from: "node" }),
       CliCommandExit,
@@ -305,7 +305,7 @@ Deno.test("deploy command - rejects repository URLs combined with --manifest", a
     assertSpyCalls(fetchStub, 0);
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "--manifest cannot be used together with a repository URL.",
+      "--app-spec cannot be used together with a repository URL.",
     );
   } finally {
     fetchStub.restore();
@@ -349,7 +349,7 @@ Deno.test("deploy command - rejects repository URL deploy", async () => {
   }
 });
 
-Deno.test("deploy command - rejects --ref for local manifest deploys", async () => {
+Deno.test("deploy command - rejects --ref for local AppSpec deploys", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -385,7 +385,7 @@ Deno.test("deploy command - rejects --ref for local manifest deploys", async () 
   }
 });
 
-Deno.test("deploy command - rejects --ref-type for local manifest deploys", async () => {
+Deno.test("deploy command - rejects --ref-type for local AppSpec deploys", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -460,7 +460,7 @@ Deno.test(
   },
 );
 
-Deno.test("deploy command - requires an explicit local manifest", async () => {
+Deno.test("deploy command - requires an explicit local AppSpec", async () => {
   const program = createDeployProgram();
   const logSpy = stub(console, "log", () => {});
   setAuthEnv();
@@ -476,7 +476,7 @@ Deno.test("deploy command - requires an explicit local manifest", async () => {
     );
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "Local deploys require --manifest <path>.",
+      "Local deploys require --app-spec <path>.",
     );
   } finally {
     logSpy.restore();
@@ -504,8 +504,8 @@ Deno.test(
               "node",
               "takos",
               "deploy",
-              "--manifest",
-              path.join(projectDir, ".takosumi", "manifest.yml"),
+              "--app-spec",
+              path.join(projectDir, ".takosumi.yml"),
               "--preview",
             ], { from: "node" }),
           CliCommandExit,
@@ -545,8 +545,8 @@ Deno.test(
               "node",
               "takos",
               "deploy",
-              "--manifest",
-              path.join(projectDir, ".takosumi", "manifest.yml"),
+              "--app-spec",
+              path.join(projectDir, ".takosumi.yml"),
               "--resolve-only",
             ], { from: "node" }),
           CliCommandExit,

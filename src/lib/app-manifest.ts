@@ -7,8 +7,8 @@ import { parseAppManifestYaml as parseCanonicalAppManifestYaml } from "./app-man
 export type AppManifest = ParsedAppManifest;
 
 const APP_MANIFEST_FILE_NAMES = [
-  path.join(".takosumi", "manifest.yml"),
-  path.join(".takosumi", "manifest.yaml"),
+  "manifest.yml",
+  "manifest.yaml",
 ];
 
 export async function findAppManifestFile(dir: string): Promise<string | null> {
@@ -38,7 +38,7 @@ export async function resolveAppManifestPath(
   const manifestPath = await findAppManifestFile(startDir);
   if (!manifestPath) {
     throw new Error(
-      "No .takosumi/manifest.yml or .takosumi/manifest.yaml found in the current directory",
+      "No group desired manifest.yml or manifest.yaml found in the current directory",
     );
   }
   return manifestPath;

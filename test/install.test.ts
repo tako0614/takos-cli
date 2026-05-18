@@ -55,7 +55,7 @@ Deno.test("install command - points to current AppInstallation entry points", as
       logOutput(logSpy.calls),
       "takos install is not the current AppInstallation entry point",
     );
-    assertStringIncludes(logOutput(logSpy.calls), "takosumi-git install");
+    assertStringIncludes(logOutput(logSpy.calls), "takosumi install dry-run");
   } finally {
     fetchStub.restore();
     logSpy.restore();
@@ -78,11 +78,11 @@ Deno.test("install command - help documents nonzero guidance-only behavior", asy
     help,
     "takos install intentionally exits nonzero",
   );
-  assertStringIncludes(help, "takosumi-git install preview <git-url>");
-  assertStringIncludes(help, "takosumi-git install apply <git-url>");
+  assertStringIncludes(help, "takosumi install dry-run");
+  assertStringIncludes(help, "takosumi install git:");
 });
 
-Deno.test("install command - includes runtime mode in takosumi-git guidance", async () => {
+Deno.test("install command - explains runtime mode ownership", async () => {
   const fetchStub = stub(
     globalThis,
     "fetch",
@@ -109,7 +109,7 @@ Deno.test("install command - includes runtime mode in takosumi-git guidance", as
     assertSpyCalls(fetchStub, 0);
     assertStringIncludes(
       logOutput(logSpy.calls),
-      "takosumi-git install --mode shared-cell",
+      "Runtime mode 'shared-cell' is selected by the operator account plane",
     );
   } finally {
     fetchStub.restore();

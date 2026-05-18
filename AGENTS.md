@@ -31,7 +31,15 @@ API に送る deploy command を提供する。
 
 - **Upstream**: Takos public API (`takos/app/` の API gateway)
 - **Upstream contract**: app manifest contract
-  (`src/lib/app-manifest-contract/`、 published package を再構築)
+  (`src/lib/app-manifest-contract/`、 published package を再構築)。 `.takosumi.yml`
+  AppSpec (`apiVersion: "takosumi.dev/v1"` / `kind: "App"`) の field 定義は
+  `takosumi/docs/reference/app-spec.md` が canonical。 5 frozen component kind
+  (worker / postgres / object-store / oidc / custom-domain) は
+  `https://takosumi.com/kinds/v1/<name>` の JSON-LD kind catalog を参照
+- **Upstream Takosumi installer**: `takosumi/packages/installer/` の 5 endpoint
+  installer API (`POST /v1/installations/*`)。 `takos deploy` は GitOps
+  deploy-intent flow を経由し、 `takos installations` は Takosumi Accounts
+  Installation ledger を直接照会する
 - **Downstream**: end users (developers, operators)
 
 ## Substitutability

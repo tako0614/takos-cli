@@ -33,13 +33,16 @@ API に送る deploy command を提供する。
 - **Upstream contract**: app manifest contract
   (`src/lib/app-manifest-contract/`、 published package を再構築)。 `.takosumi.yml`
   AppSpec (`apiVersion: "takosumi.dev/v1"` / `kind: "App"`) の field 定義は
-  `takosumi/docs/reference/app-spec.md` が canonical。 5 frozen component kind
-  (worker / postgres / object-store / oidc / custom-domain) は
-  `https://takosumi.com/kinds/v1/<name>` の JSON-LD kind catalog を参照
+  `takosumi/docs/reference/app-spec.md` が canonical。 component kind catalog は
+  `https://takosumi.com/kinds/v1/<name>` の JSON-LD で extensible (RFC ベースで
+  kind を追加可能)。 component は 3 axis (`kind` / `publish` / `listen`) で
+  declarative に書く。
 - **Upstream Takosumi installer**: `takosumi/packages/installer/` の 5 endpoint
   installer API (`POST /v1/installations/*`)。 `takos deploy` は GitOps
   deploy-intent flow を経由し、 `takos installations` は Takosumi Accounts
-  Installation ledger を直接照会する
+  Installation ledger を直接照会する。 HTTP status は 409 (TOCTOU) / 413 (size)
+  のみ、 idempotency key header は持たない (replay protection は dry-run response
+  の `expected.commit` / `expected.manifestDigest` を apply 時に pin する形)。
 - **Downstream**: end users (developers, operators)
 
 ## Substitutability

@@ -8,7 +8,6 @@ import { registerDeployCommand } from "../src/commands/deploy.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 
 const localAppSpecYaml = `apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: sample-app
   name: Sample App

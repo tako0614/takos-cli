@@ -321,7 +321,6 @@ Deno.test("deploy manifest - rejects unsupported envelope manifests", async () =
   await withTempRepo({
     "manifest.yml": `
 apiVersion: example.com/v1
-kind: App
 metadata:
   name: sample-app
 spec:

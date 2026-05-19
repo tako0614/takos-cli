@@ -101,16 +101,16 @@ takos deploy --app-spec .takosumi.yml --env production --group GROUP_NAME
 ```
 
 `takos deploy` は local AppSpec path を `--app-spec` で受け取り、
-`.takosumi.yml` (`apiVersion: "takosumi.dev/v1"`, `kind: "App"`) を GitOps
-deploy intent として 送ります。 worker bundle や build artifact の解決は
-Takosumi installer / GitOps deploy-intent flow 側で行います。
+`.takosumi.yml` (`apiVersion: "takosumi.dev/v1"`) を GitOps deploy intent として
+送ります。 worker bundle や build artifact の解決は Takosumi installer / GitOps
+deploy-intent flow 側で行います。
 
-Installation install は `takosumi install` または Takosumi Accounts install
-API を使います。dry-run で返った `expected.commit` / `expected.manifestDigest`
-を apply 時に pin します。 `expected` pin mismatch は **409 Conflict**、
-oversize request body は **413 Payload Too Large** で reject されます (idempotency
-key header は持ちません)。 runtime mode の選択は Takos CLI ではなく operator
-account plane / Installation materialize flow の責務です。
+Installation install は `takosumi install` または Takosumi Accounts install API
+を使います。dry-run で返った `expected.commit` / `expected.manifestDigest` を
+apply 時に pin します。 `expected` pin mismatch は **409 Conflict**、 oversize
+request body は **413 Payload Too Large** で reject されます (idempotency key
+header は持ちません)。 runtime mode の選択は Takos CLI ではなく operator account
+plane / Installation materialize flow の責務です。
 
 `--space <id>` を明示しない場合は `TAKOS_SPACE_ID` か `.takos-session` に
 入っている既定 space を使います。

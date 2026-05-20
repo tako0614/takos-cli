@@ -45,7 +45,7 @@ async function loadAppSpec(
   if (!isAppSpec(appSpec)) {
     console.log(
       red(
-        'Deploy AppSpec must be `.takosumi.yml` (`apiVersion: "takosumi.dev/v1"`, `metadata`, `components`). Root `kind:` field is rejected (= Wave K AppSpec envelope minimization).',
+        'Deploy AppSpec must be `.takosumi.yml` (`apiVersion: "v1"`, `metadata`, `components`). Root `kind:` field is rejected (= Wave K AppSpec envelope minimization). Legacy `apiVersion: "takosumi.dev/v1"` is rejected (= Wave L apiVersion group prefix removal).',
       ),
     );
     cliExit(1);
@@ -62,8 +62,11 @@ function isAppSpec(value: unknown): value is AppSpec {
   // Authors who keep `kind:` get a fail-closed reject (= takosumi installer
   // parser rejects unknown root key as `validationPhase: "schema"`, `$.kind`).
   if ("kind" in record) return false;
+  // Wave L (= apiVersion group prefix removal): plain `v1` is the canonical
+  // literal. Legacy `takosumi.dev/v1` is rejected fail-closed (= same shape
+  // as takosumi installer parser `apiVersion !== APP_SPEC_API_VERSION`).
   const metadata = record.metadata;
-  return record.apiVersion === "takosumi.dev/v1" &&
+  return record.apiVersion === "v1" &&
     metadata !== null &&
     typeof metadata === "object" &&
     !Array.isArray(metadata) &&

@@ -7,7 +7,7 @@ import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerDeployCommand } from "../src/commands/deploy.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 
-const localAppSpecYaml = `apiVersion: takosumi.dev/v1
+const localAppSpecYaml = `apiVersion: v1
 metadata:
   id: sample-app
   name: Sample App

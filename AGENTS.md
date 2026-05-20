@@ -32,10 +32,12 @@ API に送る deploy command を提供する。
 - **Upstream**: Takos public API (`takos/app/` の API gateway)
 - **Upstream contract**: app manifest contract
   (`src/lib/app-manifest-contract/`、 published package を再構築)。
-  `.takosumi.yml` AppSpec (`apiVersion: "takosumi.dev/v1"`) の field 定義は
+  `.takosumi.yml` AppSpec (`apiVersion: "v1"`) の field 定義は
   `takosumi/docs/reference/app-spec.md` が canonical (= Wave K で root envelope
   は `apiVersion` / `metadata` / `components` の 3 field に minimize 済、 旧
-  `kind: "App"` root field は物理削除済)。 component kind catalog は
+  `kind: "App"` root field は物理削除済。 Wave L で `apiVersion` の group prefix
+  を削除し plain `v1` に統一済、 旧 `takosumi.dev/v1` は legacy として
+  fail-closed reject される)。 component kind catalog は
   `https://takosumi.com/kinds/v1/<name>` の JSON-LD で extensible (RFC ベースで
   kind を追加可能)。 component は 3 axis (`kind` / `publish` / `listen`) で
   declarative に書く。

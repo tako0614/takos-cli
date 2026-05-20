@@ -101,8 +101,10 @@ takos deploy --app-spec .takosumi.yml --env production --group GROUP_NAME
 ```
 
 `takos deploy` は local AppSpec path を `--app-spec` で受け取り、
-`.takosumi.yml` (`apiVersion: "takosumi.dev/v1"`) を GitOps deploy intent として
-送ります。 worker bundle や build artifact の解決は Takosumi installer / GitOps
+`.takosumi.yml` (`apiVersion: "v1"`) を GitOps deploy intent として 送ります (=
+Wave L で group prefix を削除し plain `v1` に統一済。 旧
+`apiVersion: "takosumi.dev/v1"` は legacy として fail-closed reject されます)。
+worker bundle や build artifact の解決は Takosumi installer / GitOps
 deploy-intent flow 側で行います。
 
 Installation install は `takosumi install` または Takosumi Accounts install API

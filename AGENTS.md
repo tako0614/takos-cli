@@ -30,22 +30,39 @@ API に送る deploy command を提供する。
 ## 隣接 product との contract
 
 - **Upstream**: Takos public API (`takos/app/` の API gateway)
-- **Upstream contract**: app manifest contract
-  (`src/lib/app-manifest-contract/`、 published package を再構築)。
-  `.takosumi.yml` AppSpec (`apiVersion: "v1"`) の field 定義は
-  `takosumi/docs/reference/app-spec.md` が canonical (= Wave K で root envelope
-  は `apiVersion` / `metadata` / `components` の 3 field に minimize 済、 旧
-  `kind: "App"` root field は物理削除済。 Wave L で `apiVersion` の group prefix
-  を削除し plain `v1` に統一済、 旧 `takosumi.dev/v1` は legacy として
-  fail-closed reject される)。 component kind catalog は
-  `https://takosumi.com/kinds/v1/<name>` の JSON-LD で extensible (RFC ベースで
-  kind を追加可能)。 component は 3 axis (`kind` / `publish` / `listen`) で
-  declarative に書く。 takos-cli の app-manifest contract は既に `build:` reject
-  済なので、 takosumi の `.takosumi.yml` format も同方向に進化する Wave N RFC (=
-  takosumi 内
-  [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)、
-  Component.build 削除 + curated 4-kind catalog 廃止 + kernel pure contract
-  executor 化、 2026-05-21 RFC stage) を参照可。
+- **Upstream contract (2 scope)**: takos-cli は **2 つの別 contract scope** を
+  扱うため、 必ず scope を区別すること。
+  - **app-manifest contract** (= `src/lib/app-manifest-contract/`、 published
+    package を再構築): `manifest.yml` / `manifest.yaml` 用の CLI-local flat
+    schema parser。 `takos group desired` 等の group desired flow で使う。
+    `compute.<name>.build:` および `overrides.compute.<name>.build:` を
+    fail-closed **reject** 済 (= `parse-compute.ts` / `index.ts` の
+    `buildMetadataDisabledMessage`)。 build artifact 解決は `takosumi install`
+    経路で行う方針。
+  - **`.takosumi.yml` AppSpec 経路** (= `src/commands/deploy.ts` の
+    `isAppSpec()`): `takos deploy --app-spec` で送る GitOps deploy intent
+    の入口。 envelope shape (`apiVersion === "v1"` / `metadata.id` /
+    `metadata.name` / `components` object) のみ検証し、 `components.*` 配下の
+    field (= `build:` 含む) は opaque pass-through する。 AppSpec contract の
+    field-level validation (= `Component.build` 等の field 検証) は takosumi
+    installer 側の `packages/installer/` で downstream として実施 される。
+    takos-cli 側で field-level validation を持たないのは意図的で、 AppSpec
+    contract evolution (= Wave N で `Component.build` 削除予定) は takosumi
+    側で吸収され、 CLI surface は影響を受けない。
+  - `.takosumi.yml` AppSpec (`apiVersion: "v1"`) の field 定義は
+    `takosumi/docs/reference/app-spec.md` が canonical (= Wave K で root
+    envelope は `apiVersion` / `metadata` / `components` の 3 field に minimize
+    済、 旧 `kind: "App"` root field は物理削除済。 Wave L で `apiVersion` の
+    group prefix を削除し plain `v1` に統一済、 旧 `takosumi.dev/v1` は legacy
+    として fail-closed reject される)。 component kind catalog は
+    `https://takosumi.com/kinds/v1/<name>` の JSON-LD で extensible (RFC ベース
+    で kind を追加可能)。 component は 3 axis (`kind` / `publish` / `listen`) で
+    declarative に書く。 Wave N planned (= takosumi 内
+    [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)、
+    Component.build 削除 + curated 4-kind catalog 廃止 + kernel pure contract
+    executor 化、 2026-05-21 RFC stage) で `.takosumi.yml` 側の `build:` field
+    が installer / gateway 経路で reject されるようになる予定だが、 takos-cli 側
+    (= envelope shape check) は変わらない。
 - **Upstream Takosumi installer**: `takosumi/packages/installer/` の 5 endpoint
   installer API (`POST /v1/installations/*`)。 `takos deploy` は GitOps
   deploy-intent flow を経由し、 `takos installations` は Takosumi Accounts

@@ -7,6 +7,16 @@ import { assertSpyCalls, stub } from "@std/testing/mock";
 import { registerDeployCommand } from "../src/commands/deploy.ts";
 import { CliCommandExit } from "../src/lib/command-exit.ts";
 
+// `.takosumi.yml` AppSpec fixture. takos-cli の deploy 経路 (= isAppSpec) は
+// envelope shape (apiVersion / metadata / components) のみ検証し、
+// components.* 配下の field (= build: 含む) は opaque pass-through する。
+// 従って `components.gateway.build:` がここに含まれていても CLI は accept する。
+// AppSpec contract の field-level validation (= Component.build 等) は takosumi
+// installer 側 (packages/installer/) の downstream 責務。 Wave N planned (=
+// takosumi RFC 0001) で `Component.build` 削除予定だが、 takos-cli の CLI
+// surface (= envelope shape check) は影響を受けない。 別 contract scope の
+// app-manifest contract (= src/lib/app-manifest-contract/、 manifest.yml /
+// manifest.yaml 用) は既に compute.<name>.build: を fail-closed reject 済。
 const localAppSpecYaml = `apiVersion: v1
 metadata:
   id: sample-app

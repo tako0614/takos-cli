@@ -105,12 +105,31 @@ takos deploy --app-spec .takosumi.yml --env production --group GROUP_NAME
 Wave L で group prefix を削除し plain `v1` に統一済。 旧
 `apiVersion: "takosumi.dev/v1"` は legacy として fail-closed reject されます)。
 worker bundle や build artifact の解決は Takosumi installer / GitOps
-deploy-intent flow 側で行います。 (= Wave N planned: takosumi 側で
-`Component.build` field 削除 + curated 4-kind catalog 廃止 + kernel pure
-contract executor 化が RFC stage、 詳細は takosumi
-[RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)。 takos-cli
-の app-manifest contract は既に `build:` を reject 済なので CLI surface は影響
-を受けません。)
+deploy-intent flow 側で行います。
+
+takos-cli は **2 つの contract scope** を別経路で扱うため、 `build:` field の
+取り扱いも経路によって異なります:
+
+1. **app-manifest contract** (= `src/lib/app-manifest-contract/`、
+   `manifest.yml` / `manifest.yaml` 用、 `takos group desired` 等で読み込む
+   CLI-local contract): `compute.<name>.build:` を fail-closed **reject** 済 (=
+   `parse-compute.ts` の `buildMetadataDisabledMessage`、 上書き経路の
+   `overrides.compute.<name>.build:` も同様 reject)。 build artifact 解決は
+   `takosumi install` 経路で行う方針。
+2. **`.takosumi.yml` AppSpec 経路** (= `takos deploy --app-spec` で送る GitOps
+   deploy intent): `deploy.ts` の `isAppSpec()` は envelope shape
+   (`apiVersion === "v1"` / `metadata.id` / `metadata.name` / `components`
+   object) のみ検証し、 `components.*` 配下の field は opaque pass-through
+   します。 つまり Wave J/K/L 時点では `components.<name>.build:` を含む
+   `.takosumi.yml` はそのまま gateway に転送されます (= AppSpec contract
+   validation は takosumi installer 側の `packages/installer/` で実施される
+   downstream 責務)。 Wave N planned で takosumi 側 `Component.build` field
+   が削除されると、 該当 AppSpec は gateway / installer 側で reject される
+   ようになりますが、 takos-cli の CLI surface (= envelope shape check) は
+   変わりません。 詳細は takosumi
+   [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic) (=
+   Component.build 削除 + curated 4-kind catalog 廃止 + kernel pure contract
+   executor 化) を参照。
 
 Installation install は `takosumi install` または Takosumi Accounts install API
 を使います。dry-run で返った `expected.commit` / `expected.manifestDigest` を

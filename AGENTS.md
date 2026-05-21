@@ -40,7 +40,12 @@ API に送る deploy command を提供する。
   fail-closed reject される)。 component kind catalog は
   `https://takosumi.com/kinds/v1/<name>` の JSON-LD で extensible (RFC ベースで
   kind を追加可能)。 component は 3 axis (`kind` / `publish` / `listen`) で
-  declarative に書く。
+  declarative に書く。 takos-cli の app-manifest contract は既に `build:` reject
+  済なので、 takosumi の `.takosumi.yml` format も同方向に進化する Wave N RFC (=
+  takosumi 内
+  [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)、
+  Component.build 削除 + curated 4-kind catalog 廃止 + kernel pure contract
+  executor 化、 2026-05-21 RFC stage) を参照可。
 - **Upstream Takosumi installer**: `takosumi/packages/installer/` の 5 endpoint
   installer API (`POST /v1/installations/*`)。 `takos deploy` は GitOps
   deploy-intent flow を経由し、 `takos installations` は Takosumi Accounts

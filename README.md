@@ -105,7 +105,12 @@ takos deploy --app-spec .takosumi.yml --env production --group GROUP_NAME
 Wave L で group prefix を削除し plain `v1` に統一済。 旧
 `apiVersion: "takosumi.dev/v1"` は legacy として fail-closed reject されます)。
 worker bundle や build artifact の解決は Takosumi installer / GitOps
-deploy-intent flow 側で行います。
+deploy-intent flow 側で行います。 (= Wave N planned: takosumi 側で
+`Component.build` field 削除 + curated 4-kind catalog 廃止 + kernel pure
+contract executor 化が RFC stage、 詳細は takosumi
+[RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)。 takos-cli
+の app-manifest contract は既に `build:` を reject 済なので CLI surface は影響
+を受けません。)
 
 Installation install は `takosumi install` または Takosumi Accounts install API
 を使います。dry-run で返った `expected.commit` / `expected.manifestDigest` を

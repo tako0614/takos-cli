@@ -5,3 +5,6 @@ deno.lock
 node_modules/
 takos
 *.tsbuildinfo
+node_modules
+takos-bin
+coverage

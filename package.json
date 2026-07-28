@@ -1,0 +1,31 @@
+{
+  "name": "takos-cli",
+  "version": "0.2.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "module": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "takos": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "check": "tsc --noEmit",
+    "test": "bun test ./test/",
+    "test:coverage": "bun test --coverage ./test/",
+    "compile": "bun build --compile --outfile takos src/index.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "ws": "^8.19.0",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.7.0"
+  }
+}
